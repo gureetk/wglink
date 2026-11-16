@@ -82,6 +82,22 @@ func shells(t *testing.T) map[string][]string {
 	return out
 }
 
+// needStubbedIP skips tests that rely on the ip stub when the shell runs a
+// built-in ip instead, as some busybox builds do.
+func needStubbedIP(t *testing.T, shell []string) {
+	t.Helper()
+	bin := t.TempDir()
+	stub := filepath.Join(bin, "ip")
+	if err := os.WriteFile(stub, []byte("#!/bin/sh\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	cmd := exec.Command(shell[0], append(shell[1:], "-c", "command -v ip")...)
+	cmd.Env = []string{"PATH=" + bin + ":/usr/bin:/bin"}
+	if out, _ := cmd.Output(); strings.TrimSpace(string(out)) != stub {
+		t.Skipf("%s runs its own ip, so the stub can't stand in", shell[0])
+	}
+}
+
 // shRunner runs scripts locally under a chosen shell with the stubs on PATH,
 // and fails the test if a private key ever appears in the output.
 type shRunner struct {
@@ -242,6 +258,7 @@ func testWrite(t *testing.T, shell []string) {
 }
 
 func testWriteModes(t *testing.T, shell []string) {
+	needStubbedIP(t, shell)
 	e := setup(t, shell, "systemd")
 	e.n.EnsureKey(ctx, "wg-lab")
 
@@ -336,6 +353,7 @@ func testRemove(t *testing.T, shell []string) {
 }
 
 func testProbe(t *testing.T, shell []string) {
+	needStubbedIP(t, shell)
 	e := setup(t, shell, "none")
 	e.write(t, "addr", "1: lo    inet 127.0.0.1/8 scope host lo\\       valid_lft forever\n2: eth0@if7    inet 192.168.1.10/24 brd 192.168.1.255 scope global eth0\\       valid_lft forever\n3: wg-lab    inet 10.99.0.1/24 scope global wg-lab\\       valid_lft forever\n")
 	e.write(t, "route4", "default via 192.168.1.1 dev eth0 proto dhcp\n192.168.1.0/24 dev eth0 proto kernel scope link src 192.168.1.10\nlocal 192.168.1.10 dev eth0 table local proto kernel scope host\n")
@@ -378,6 +396,7 @@ func testProbe(t *testing.T, shell []string) {
 }
 
 func testStatus(t *testing.T, shell []string) {
+	needStubbedIP(t, shell)
 	e := setup(t, shell, "none")
 	e.up(t, "wg-lab", false)
 	e.write(t, "dump.wg-lab", "priv000000000000000000000000000000000000001=\t"+pubOf1+"\t51820\toff\n"+
@@ -419,6 +438,7 @@ func testStatus(t *testing.T, shell []string) {
 func TestStatusIncludesConfig(t *testing.T) {
 	for name, shell := range shells(t) {
 		t.Run(name, func(t *testing.T) {
+			needStubbedIP(t, shell)
 			e := setup(t, shell, "none")
 			e.n.EnsureKey(ctx, "wg-lab")
 			if _, err := e.n.Write(ctx, Write{Iface: "wg-lab", Config: rendered(false)}); err != nil {
