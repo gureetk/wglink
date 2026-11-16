@@ -8,7 +8,5 @@ import (
 )
 
 func main() {
-	if err := cli.Execute(); err != nil {
-		os.Exit(1) // cobra has already printed the error
-	}
+	os.Exit(cli.Main())
 }

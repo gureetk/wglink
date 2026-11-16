@@ -46,11 +46,15 @@ func TestRejectsBadArgs(t *testing.T) {
 }
 
 // runCLI runs a fresh root with args and returns what it wrote to stdout.
-func runCLI(args ...string) (string, error) {
+func runCLI(args ...string) (string, error) { return runCLIIn("", args...) }
+
+// runCLIIn is runCLI with text on stdin.
+func runCLIIn(stdin string, args ...string) (string, error) {
 	var out bytes.Buffer
 	root := newRoot("v1.2.3")
 	root.SetOut(&out)
 	root.SetErr(io.Discard)
+	root.SetIn(strings.NewReader(stdin))
 	// A nil slice makes cobra fall back to os.Args.
 	root.SetArgs(append([]string{}, args...))
 	err := root.Execute()

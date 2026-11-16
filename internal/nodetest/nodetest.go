@@ -144,6 +144,30 @@ func New(t testing.TB, shell []string, keyBase int) *Fake {
 	return f
 }
 
+// Exec writes a wrapper that runs wglink's scripts as if on this fake and
+// returns it as an exec prefix for wglink.yaml.
+func (f *Fake) Exec() []string {
+	f.t.Helper()
+	shell, err := exec.LookPath(f.shell[0])
+	if err != nil {
+		f.t.Fatal(err)
+	}
+	var b strings.Builder
+	b.WriteString("#!/bin/sh\n")
+	for _, e := range f.env {
+		k, v, _ := strings.Cut(e, "=")
+		b.WriteString("export " + k + "=" + runner.Quote([]string{v}) + "\n")
+	}
+	b.WriteString(`if [ -e "$STUB/unreachable" ]; then cat "$STUB/unreachable" >&2; exit 255; fi` + "\n")
+	// wglink runs "sh -s" with the script on stdin; aim it at this fake's directory.
+	b.WriteString(`sed "s|^WG_DIR=.*|WG_DIR='$STUB_WGDIR'|" | exec ` + runner.Quote(append([]string{shell}, f.shell[1:]...)) + " -s\n")
+	path := filepath.Join(f.Stub, "node.sh")
+	if err := os.WriteFile(path, []byte(b.String()), 0o755); err != nil {
+		f.t.Fatal(err)
+	}
+	return []string{path}
+}
+
 // Runner runs scripts on the fake and fails the test if a private key ever
 // appears in their output.
 func (f *Fake) Runner() runner.Runner { return fakeRunner{f} }
