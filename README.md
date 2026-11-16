@@ -2,15 +2,15 @@
 
 > One command to connect Linux machines over WireGuard.
 
-wglink (Wireguard Link) is being developed as a lightweight go binary to streamline connecting machines over LAN via Wireguard and the process of managing them.
+wglink (WireGuard Link) is being developed as a lightweight Go binary to streamline connecting machines over LAN via WireGuard and the process of managing them.
 
 ## Status
 
 wglink is very early work in progress and is not ready for production use.
 
 ## Planned Features
-- Point-to-point Wireguard links
-- Full mesh Wireguard networks
+- Point-to-point WireGuard links
+- Full mesh WireGuard networks
 - Automatic tunnel address selection
 - Manual control over hosts, addresses, and subnets
 - Declarative inventory configuration
