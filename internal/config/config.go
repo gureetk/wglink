@@ -273,6 +273,9 @@ func sortedKeys[V any](m map[string]V) []string {
 	return keys
 }
 
+// ErrNotFound is returned, wrapped, when Find finds no wglink.yaml.
+var ErrNotFound = errors.New("no " + FileName)
+
 // Find returns the directory holding wglink.yaml, checking dir, then
 // $WGLINK_DIR, the working directory and ~/.config/wglink.
 func Find(dir string) (string, error) {
@@ -281,7 +284,7 @@ func Find(dir string) (string, error) {
 	}
 	if dir != "" {
 		if _, err := os.Stat(filepath.Join(dir, FileName)); err != nil {
-			return "", fmt.Errorf("no %s in %s; run \"wglink init\" there first", FileName, dir)
+			return "", fmt.Errorf("%w in %s; run \"wglink init\" there first", ErrNotFound, dir)
 		}
 		return dir, nil
 	}
@@ -294,7 +297,7 @@ func Find(dir string) (string, error) {
 			return d, nil
 		}
 	}
-	return "", fmt.Errorf("no %s here or in ~/.config/wglink; run \"wglink init\" first", FileName)
+	return "", fmt.Errorf("%w here or in ~/.config/wglink; run \"wglink init\" first", ErrNotFound)
 }
 
 var (

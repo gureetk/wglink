@@ -260,12 +260,14 @@ func testStatus(t *testing.T, shell []string) {
 		"peerkeyA\tpriv000000000000000000000000000000000000002=\t192.168.1.20:51820\t10.99.0.2/32\t1700000000\t1024\t2048\t25\n"+
 		"peerkeyB\t(none)\t(none)\t10.99.0.3/32,192.168.50.0/24\t0\t0\t0\toff\n")
 	e.WriteStub("pingable", "10.99.0.2\n")
-	st, err := e.n.Status(ctx, []string{"wg-lab", "wg-down"}, []PingTarget{
-		{Iface: "wg-lab", Addr: netip.MustParseAddr("10.99.0.2")},
-		{Iface: "wg-lab", Addr: netip.MustParseAddr("10.99.0.3")},
-	})
+	e.WriteStub("now", "1700000100\n")
+	two, three := PingTarget{"wg-lab", netip.MustParseAddr("10.99.0.2")}, PingTarget{"wg-lab", netip.MustParseAddr("10.99.0.3")}
+	st, err := e.n.Status(ctx, []string{"wg-lab", "wg-down"}, []PingTarget{two, three})
 	if err != nil {
 		t.Fatal(err)
+	}
+	if st.Now.Unix() != 1700000100 {
+		t.Errorf("now = %v", st.Now)
 	}
 	lab := st.Ifaces["wg-lab"]
 	if !lab.Up || lab.PublicKey != pubOf1 || lab.ListenPort != 51820 || len(lab.Peers) != 2 {
@@ -284,11 +286,43 @@ func testStatus(t *testing.T, shell []string) {
 	if st.Ifaces["wg-down"].Up {
 		t.Error("wg-down reported up")
 	}
-	if p := st.Pings[netip.MustParseAddr("10.99.0.2")]; !p.OK || p.RTT.Microseconds() != 420 {
+	if p := st.Pings[two]; !p.OK || p.RTT.Microseconds() != 420 {
 		t.Errorf("ping .2 = %+v", p)
 	}
-	if p := st.Pings[netip.MustParseAddr("10.99.0.3")]; p.OK {
-		t.Errorf("ping .3 = %+v", p)
+	if p, ok := st.Pings[three]; !ok || p.OK {
+		t.Errorf("ping .3 = %+v, %v", p, ok)
+	}
+}
+
+func TestStatusAllInterfaces(t *testing.T) {
+	for name, shell := range nodetest.Shells(t) {
+		t.Run(name, func(t *testing.T) {
+			nodetest.NeedStubbedIP(t, shell)
+			e := setup(t, shell, "none")
+			// wg-lab is wglink's but down; wg0 is up but someone else's;
+			// other.conf is neither wglink's nor up.
+			e.n.EnsureKey(ctx, "wg-lab")
+			if _, err := e.n.Write(ctx, Write{Iface: "wg-lab", Config: rendered(false)}); err != nil {
+				t.Fatal(err)
+			}
+			e.SetDown("wg-lab")
+			e.SetUp("wg0", false)
+			e.WriteStub("dump.wg0", "priv000000000000000000000000000000000000009=\tpub0wg0\t51000\toff\n")
+			os.WriteFile(filepath.Join(e.Dir, "other.conf"), []byte("[Interface]\n"), 0o600)
+			st, err := e.n.Status(ctx, AllInterfaces, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(st.Ifaces) != 2 {
+				t.Fatalf("interfaces = %v", st.Ifaces)
+			}
+			if lab := st.Ifaces["wg-lab"]; lab == nil || lab.Up || wgconf.Hash(lab.Config) != wgconf.Hash(rendered(false)) {
+				t.Errorf("wg-lab = %+v", lab)
+			}
+			if wg0 := st.Ifaces["wg0"]; wg0 == nil || !wg0.Up || wg0.ListenPort != 51000 || wg0.Config != nil {
+				t.Errorf("wg0 = %+v", wg0)
+			}
+		})
 	}
 }
 
