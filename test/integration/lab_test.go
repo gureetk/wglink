@@ -30,12 +30,12 @@ type lab struct {
 	dir   string // holds wglink.yaml and wglink.state.json
 	work  string // node files, wrappers and ssh keys
 	env   *[]string
-	nodes map[string]*node
+	nodes map[string]*machine
 	seen  *bytes.Buffer // everything wglink printed, to check for leaked keys
 }
 
-// node is one machine in the lab.
-type node struct {
+// machine is one node in the lab.
+type machine struct {
 	name  string
 	lan   string   // its LAN address
 	run   []string // runs a command as root on it
@@ -43,7 +43,7 @@ type node struct {
 }
 
 func newLab(t *testing.T) *lab {
-	l := &lab{t: t, dir: t.TempDir(), work: t.TempDir(), env: &[]string{}, nodes: map[string]*node{}, seen: &bytes.Buffer{}}
+	l := &lab{t: t, dir: t.TempDir(), work: t.TempDir(), env: &[]string{}, nodes: map[string]*machine{}, seen: &bytes.Buffer{}}
 	l.removeNetns(lanNS)
 	l.root("ip", "netns", "add", lanNS)
 	t.Cleanup(func() { l.removeNetns(lanNS) })
@@ -102,7 +102,7 @@ func (l *lab) removeNetns(ns string) {
 // netnsNode adds a node in its own network namespace at lanNet.N, with
 // private /etc/wireguard and /run/wireguard (wireguard-go keeps its sockets
 // there), reached through an exec wrapper.
-func (l *lab) netnsNode(name string, n int) *node {
+func (l *lab) netnsNode(name string, n int) *machine {
 	l.t.Helper()
 	ns := "wgl-" + name
 	l.removeNetns(ns)
@@ -133,7 +133,7 @@ exec "$@"' %s "$@"
 	if err := os.WriteFile(wrapper, []byte(script), 0o755); err != nil {
 		l.t.Fatal(err)
 	}
-	nd := &node{name: name, lan: lan, run: []string{wrapper}, wgDir: filepath.Join(home, "etc")}
+	nd := &machine{name: name, lan: lan, run: []string{wrapper}, wgDir: filepath.Join(home, "etc")}
 	l.nodes[name] = nd
 	return nd
 }
@@ -213,7 +213,7 @@ func (l *lab) addHostNode(name, iface string) bool {
 	if os.Getenv("WGLINK_INTEGRATION_HOST") != "1" {
 		return false
 	}
-	nd := &node{name: name, lan: lanHost, run: sudo(), wgDir: "/etc/wireguard"}
+	nd := &machine{name: name, lan: lanHost, run: sudo(), wgDir: "/etc/wireguard"}
 	l.nodes[name] = nd
 	cleanup := func() {
 		l.tryRoot("systemctl", "disable", "--now", "wg-quick@"+iface)

@@ -64,7 +64,23 @@ case $1 in
 is-active) [ -e "$STUB/active/$unit" ] ;;
 restart|start) mkdir -p "$STUB/up" "$STUB/active"; touch "$STUB/up/$iface" "$STUB/active/$unit"; [ ! -e "$STUB/fail" ] ;;
 disable) rm -f "$STUB/up/$iface" "$STUB/active/$unit" ;;
+stop) shift; for u; do rm -f "$STUB/timers/$u"; done ;;
 esac
+`,
+	// Timers are files holding the command to run; FireRevert runs one.
+	"systemd-run": `#!/bin/sh
+echo "systemd-run $*" >> "$STUB/log"
+unit=
+while [ $# -gt 0 ]; do
+	case $1 in
+	--unit=*) unit=${1#--unit=} ;;
+	--*) ;;
+	*) break ;;
+	esac
+	shift
+done
+mkdir -p "$STUB/timers"
+printf '%s\n' "$*" > "$STUB/timers/$unit.timer"
 `,
 	"ip": `#!/bin/sh
 case "$*" in
@@ -215,6 +231,30 @@ func (f *Fake) SetUp(iface string, active bool) {
 	if active {
 		os.WriteFile(filepath.Join(f.Stub, "active", "wg-quick@"+iface), nil, 0o644)
 	}
+}
+
+// FireRevert runs the timer a write armed to undo a change to iface, as
+// systemd would once it expires.
+func (f *Fake) FireRevert(iface string) {
+	f.t.Helper()
+	timer := filepath.Join(f.Stub, "timers", "wglink-revert-"+iface+".timer")
+	cmd, err := os.ReadFile(timer)
+	if err != nil {
+		f.t.Fatalf("no revert timer for %s: %v", iface, err)
+	}
+	os.Remove(timer)
+	argv := strings.Fields(string(cmd))
+	c := exec.Command(argv[0], argv[1:]...)
+	c.Env = f.env
+	if out, err := c.CombinedOutput(); err != nil {
+		f.t.Fatalf("revert timer for %s: %v\n%s", iface, err, out)
+	}
+}
+
+// Timer reports whether a revert timer for iface is armed.
+func (f *Fake) Timer(iface string) bool {
+	_, err := os.Stat(filepath.Join(f.Stub, "timers", "wglink-revert-"+iface+".timer"))
+	return err == nil
 }
 
 // SetDown marks an interface as down.

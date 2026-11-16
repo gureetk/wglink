@@ -34,6 +34,7 @@ type Options struct {
 	Networks []string // only these networks; all when empty
 	Nodes    []string // only change these nodes; all when empty
 	Adopt    bool     // replace configs wglink didn't write
+	NoRevert bool     // don't arm the timer that undoes a change cutting off an SSH node
 }
 
 // Plan is the difference between wglink.yaml and the nodes.
@@ -223,7 +224,36 @@ func (s *Session) Plan(ctx context.Context, opts Options) (*Plan, error) {
 	}
 	s.planRemovals(p, scoped)
 	s.checkNodes(p, members)
+	s.checkRevert(p)
 	return p, nil
+}
+
+// checkRevert warns about SSH nodes that will change but can't undo a
+// change that cuts wglink off from them.
+func (s *Session) checkRevert(p *Plan) {
+	if p.opts.NoRevert {
+		return
+	}
+	warned := map[string]bool{}
+	for _, np := range p.Networks {
+		for _, mp := range np.Members {
+			switch mp.Action {
+			case Keep, Skip, Export:
+				continue
+			}
+			if _, confirm := s.confirmer(mp.Node); !confirm || warned[mp.Node] || s.canRevert(p, mp.Node) {
+				continue
+			}
+			warned[mp.Node] = true
+			p.warn("%s has no systemd, so if a change cuts wglink off from it, it can't undo the change by itself", mp.Node)
+		}
+	}
+}
+
+// canRevert reports whether a node can arm the timer that undoes a change.
+func (s *Session) canRevert(p *Plan, name string) bool {
+	f := p.facts[name]
+	return f != nil && f.Systemd && f.Have["systemd-run"]
 }
 
 // scope lists the networks to plan: the named ones, or every network in

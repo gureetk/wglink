@@ -54,7 +54,8 @@ All 3 links are ok.
   wglink's stays running on them.
 - **Careful by default.** wglink won't overwrite configs it didn't write,
   keeps a backup of every config it replaces, and lets only one `apply` run
-  at a time per inventory.
+  at a time per inventory. A change that cuts wglink off from an SSH node is
+  undone by the node itself a minute later.
 
 ## Install
 
@@ -294,6 +295,11 @@ wglink writes in its configs. It also runs when no `wglink.yaml` is found.
    change is loaded with `wg syncconf` or by restarting `wg-quick`, through
    systemd's `wg-quick@IFACE` where it's available, so tunnels come back
    after a reboot.
+5. **Confirm.** Before changing an SSH node, wglink arms a systemd timer
+   there that puts the previous config back. After the change, it opens a
+   new SSH connection and cancels the timer. If the change cut off the route
+   wglink uses, the new connection fails, and a minute later the node undoes
+   the change by itself. `--no-revert` turns this off.
 
 The scripts are embedded in the binary and fed to `sh -s` over stdin. They
 are tested under dash, bash and busybox. Only a few `WG_*` variables change
@@ -371,7 +377,6 @@ It removes the old release and tag only after the new build passes.
 ## Roadmap
 
 - **0.2:**
-  - `apply` that reverts by itself if it cuts off access.
   - `wglink discover` to add Proxmox guests.
   - Rebuilding the state file from the nodes.
 - **0.3:**

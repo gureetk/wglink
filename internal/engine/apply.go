@@ -128,9 +128,15 @@ func (s *Session) write(ctx context.Context, p *Plan, np *NetPlan, mp *MemberPla
 			}
 		}
 	}
+	w := node.Write{Iface: np.Iface, Config: text, Mode: mode, Adopt: p.opts.Adopt}
+	fresh, confirm := s.confirmer(mp.Node)
+	confirm = confirm && !p.opts.NoRevert && s.canRevert(p, mp.Node)
+	if confirm {
+		w.Revert = s.RevertAfter
+	}
 	var got []byte
 	err = s.timed(ctx, func(ctx context.Context) (err error) {
-		got, err = nd.Write(ctx, node.Write{Iface: np.Iface, Config: text, Mode: mode, Adopt: p.opts.Adopt})
+		got, err = nd.Write(ctx, w)
 		return err
 	})
 	if err != nil {
@@ -138,6 +144,13 @@ func (s *Session) write(ctx context.Context, p *Plan, np *NetPlan, mp *MemberPla
 	}
 	if wgconf.Hash(got) != wgconf.Hash(text) {
 		return fmt.Errorf("%s on %s doesn't match what was sent; check the file by hand", np.Iface, mp.Node)
+	}
+	if confirm {
+		// A new connection proves the change didn't cut wglink off.
+		check := node.Node{Runner: fresh, Dir: nd.Dir, Service: nd.Service}
+		if err := s.timed(ctx, func(ctx context.Context) error { return check.Confirm(ctx, np.Iface) }); err != nil {
+			return fmt.Errorf("couldn't confirm the change to %s on %s, so %s puts the previous config back within %s: %w", np.Iface, mp.Node, mp.Node, s.RevertAfter, err)
+		}
 	}
 	verb := map[Action]string{Create: "created", Live: "updated live", Restart: "restarted", Start: "started"}[mp.Action]
 	if mode == wgconf.Restart && mp.Action == Live {

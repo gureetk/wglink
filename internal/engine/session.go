@@ -27,10 +27,14 @@ type Session struct {
 	Timeout time.Duration
 	// Parallel bounds how many nodes are contacted at once.
 	Parallel int
+	// RevertAfter is how long an SSH node waits for wglink to confirm a
+	// change, over a new connection, before undoing it.
+	RevertAfter time.Duration
 
 	// Hooks for tests.
 	newRunner func(n *config.Node) (runner.Runner, error)
 	wgDir     func(node string) string
+	fresh     func(node string) (runner.Runner, bool)
 
 	mu        sync.Mutex
 	runners   map[string]runner.Runner
@@ -55,10 +59,11 @@ func Open(dir string) (*Session, error) {
 func New(dir string, inv *config.Inventory, st *state.State) *Session {
 	return &Session{
 		Dir: dir, Inv: inv, State: st,
-		Timeout:   2 * time.Minute,
-		Parallel:  8,
-		runners:   map[string]runner.Runner{},
-		endpoints: map[string]config.Endpoint{},
+		Timeout:     2 * time.Minute,
+		Parallel:    8,
+		RevertAfter: time.Minute,
+		runners:     map[string]runner.Runner{},
+		endpoints:   map[string]config.Endpoint{},
 	}
 }
 
@@ -133,6 +138,23 @@ func (s *Session) Node(name string) (node.Node, error) {
 		dir = s.wgDir(name)
 	}
 	return node.Node{Runner: r, Dir: dir, Service: s.Inv.Nodes[name].Service}, nil
+}
+
+// confirmer returns a runner that opens a new connection to the node, and
+// whether its changes need confirming that way: only SSH nodes can be cut
+// off by their own tunnel changing.
+func (s *Session) confirmer(name string) (runner.Runner, bool) {
+	if s.fresh != nil {
+		return s.fresh(name)
+	}
+	r, err := s.Runner(name)
+	if err != nil {
+		return nil, false
+	}
+	if sr, ok := r.(runner.SSH); ok {
+		return sr.Fresh(), true
+	}
+	return nil, false
 }
 
 // Endpoint returns where peers dial a node: its endpoint setting, or for

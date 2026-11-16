@@ -9,7 +9,7 @@ main() {
 	if [ -r /etc/os-release ]; then
 		out "@os $(sed -n 's/^ID=//p' /etc/os-release | tr -d '"')"
 	fi
-	for c in wg wg-quick ip systemctl ping; do
+	for c in wg wg-quick ip systemctl systemd-run ping; do
 		if have "$c"; then out "@have $c"; fi
 	done
 	if use_systemd; then out "@service systemd"; else out "@service none"; fi

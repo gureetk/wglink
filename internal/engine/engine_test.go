@@ -26,6 +26,7 @@ type lab struct {
 	t     *testing.T
 	dir   string
 	fakes map[string]*nodetest.Fake
+	fresh func(node string) (runner.Runner, bool) // stands in for SSH's new connections
 }
 
 func newLab(t *testing.T, names ...string) *lab {
@@ -59,6 +60,7 @@ func (l *lab) session(yaml string) *Session {
 	s := New(l.dir, inv, st)
 	s.newRunner = func(n *config.Node) (runner.Runner, error) { return l.fakes[n.Name].Runner(), nil }
 	s.wgDir = func(name string) string { return l.fakes[name].Dir }
+	s.fresh = l.fresh
 	return s
 }
 
