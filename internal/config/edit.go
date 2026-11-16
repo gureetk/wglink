@@ -4,10 +4,10 @@ import (
 	"bytes"
 	"fmt"
 	"net/netip"
-	"os"
-	"path/filepath"
 
 	"go.yaml.in/yaml/v4"
+
+	"github.com/gureetk/wglink/internal/atomicfile"
 )
 
 // Doc is an editable wglink.yaml that keeps comments and key order.
@@ -220,35 +220,7 @@ func (d *Doc) Save(path string) error {
 	if err != nil {
 		return err
 	}
-	return WriteFileAtomic(path, data, 0o644)
-}
-
-// WriteFileAtomic writes data to a temp file beside path and renames it into place.
-func WriteFileAtomic(path string, data []byte, perm os.FileMode) error {
-	if fi, err := os.Stat(path); err == nil {
-		perm = fi.Mode().Perm()
-	}
-	tmp, err := os.CreateTemp(filepath.Dir(path), "."+filepath.Base(path)+".*")
-	if err != nil {
-		return err
-	}
-	defer os.Remove(tmp.Name())
-	if _, err := tmp.Write(data); err != nil {
-		tmp.Close()
-		return err
-	}
-	if err := tmp.Chmod(perm); err != nil {
-		tmp.Close()
-		return err
-	}
-	if err := tmp.Sync(); err != nil {
-		tmp.Close()
-		return err
-	}
-	if err := tmp.Close(); err != nil {
-		return err
-	}
-	return os.Rename(tmp.Name(), path)
+	return atomicfile.Write(path, data, 0o644)
 }
 
 // Template returns the content of a new wglink.yaml.
