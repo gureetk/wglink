@@ -1,30 +1,361 @@
 # wglink
 
-> One command to connect Linux machines over WireGuard.
+[![ci](https://github.com/gureetk/wglink/actions/workflows/ci.yml/badge.svg)](https://github.com/gureetk/wglink/actions/workflows/ci.yml)
+[![release](https://img.shields.io/github/v/release/gureetk/wglink)](https://github.com/gureetk/wglink/releases)
+[![license: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
-wglink (WireGuard Link) is being developed as a lightweight Go binary to streamline connecting machines over LAN via WireGuard and the process of managing them.
+**Connect Linux machines over WireGuard from one inventory file.** List your
+machines in `wglink.yaml`, preview the change with `wglink plan`, make it
+with `wglink apply`, and check each tunnel with `wglink status`.
+
+wglink is one static binary with no agent, no coordination server and no
+account. It reaches machines the way you already do (SSH, local commands,
+`docker exec`, Proxmox `pct`), and leaves behind ordinary `wg-quick` configs
+that keep working without it. Private keys are made on the machines that use
+them and never leave.
+
+```sh
+wglink connect pve1 nas pi --name lab
+wglink apply
+```
+
+```console
+$ wglink status
+network lab   wg-lab   10.99.0.0/24   udp/51820
+  pve1  10.99.0.1       up
+  nas   10.99.0.2       up
+  pi    10.99.0.3       up
+
+  pve1 <-> nas  ok  handshake 14s ago, ping 0.4 ms  rx 1.2 MiB  tx 880.0 KiB
+  pve1 <-> pi   ok  idle, ping 1.1 ms
+  nas <-> pi    ok  handshake 1m ago, ping 0.9 ms   rx 52.3 KiB  tx 61.0 KiB
+
+All 3 links are ok.
+```
+
+## Features
+
+- **Full-mesh networks** between any Linux machines: bare metal, VMs,
+  containers, Raspberry Pis, Proxmox hosts and their guests.
+- **Automatic addressing that stays put.** Subnets, ports and tunnel
+  addresses are picked for you, kept across runs, and chosen to avoid
+  addresses, routes and ports already in use on each machine. Pin any of them
+  when you care: a host part (`.10`), a full address, a subnet or a port.
+- **Plan before you apply.** Every change is previewed. Peer changes load
+  live with `wg syncconf`; only address, port and MTU changes restart an
+  interface.
+- **Drift detection.** Edits made by hand on a machine show up in `plan` and
+  `status`, and `apply` puts the file back.
+- **Health at a glance.** `status` judges every link from handshakes and pings
+  through the tunnel. It prints JSON for scripts, gives exit codes for
+  monitoring, and has `--local` mode for checking one machine by itself.
+- **Agentless.** wglink sends small POSIX `sh` scripts over stdin to the
+  machines it manages. They need only `wireguard-tools`, and nothing of
+  wglink's stays running on them.
+- **Careful by default.** wglink won't overwrite configs it didn't write,
+  keeps a backup of every config it replaces, and lets only one `apply` run
+  at a time per inventory.
+
+## Install
+
+Download a release for Linux on amd64, arm64 or armv7:
+
+```sh
+VERSION=0.1.0 ARCH=amd64
+curl -fsSLO "https://github.com/gureetk/wglink/releases/download/v$VERSION/wglink_${VERSION}_linux_$ARCH.tar.gz"
+curl -fsSLO "https://github.com/gureetk/wglink/releases/download/v$VERSION/SHA256SUMS"
+sha256sum --check --ignore-missing SHA256SUMS
+tar -xzf "wglink_${VERSION}_linux_$ARCH.tar.gz"
+sudo install "wglink_${VERSION}_linux_$ARCH/wglink" /usr/local/bin/
+```
+
+Or build it with Go 1.26 or newer:
+
+```sh
+go install github.com/gureetk/wglink/cmd/wglink@latest
+```
+
+wglink runs on one machine, the *controller*, which can be one of the nodes
+too. Every node needs:
+
+- Linux with `sh`, `ip` (iproute2) and `wireguard-tools` (`wg` and `wg-quick`).
+- Root, or passwordless `sudo` for the user wglink connects as.
+- The WireGuard kernel module, which Linux has included since 5.6, or
+  `wireguard-go`.
+- Optionally `ping` (for `status`) and systemd (so tunnels come back after a
+  reboot).
+
+## Quick start
+
+```sh
+wglink init                                         # writes wglink.yaml here
+wglink node add pve1 --ssh root@192.168.1.10
+wglink node add nas  --ssh admin@192.168.1.20 --sudo
+wglink node add pi   --ssh pi@192.168.1.30 --sudo
+wglink connect pve1 nas pi --name lab
+wglink plan
+```
+
+`node add` connects once to check the machine and tells you if anything is
+missing:
+
+```console
+$ wglink node add nas --ssh admin@192.168.1.20 --sudo
+Added node nas.
+nas is reachable (debian; wireguard-tools installed).
+```
+
+`plan` connects to every node, works out addresses and shows what would
+change. Nothing is changed yet:
+
+```console
+$ wglink plan
+network lab   wg-lab   10.99.0.0/24   udp/51820
+  + pve1  10.99.0.1       new interface, 2 peers, new key
+  + nas   10.99.0.2       new interface, 2 peers, new key
+  + pi    10.99.0.3       new interface, 2 peers, new key
+
+3 to create, 0 to change live, 0 to restart, 0 to remove.
+Run "wglink apply" to make these changes.
+```
+
+`apply` shows the same plan, asks for confirmation, then makes the change:
+
+```console
+$ wglink apply
+...
+Apply these changes? [y/N] y
+
+  pve1: created a key for wg-lab
+  nas: created a key for wg-lab
+  pi: created a key for wg-lab
+  pve1: created wg-lab
+  nas: created wg-lab
+  pi: created wg-lab
+Done.
+```
+
+Then `wglink status` checks every pair, as shown at the top of this page.
+After that, change `wglink.yaml` with commands or by hand, and run `plan` and
+`apply` again. For example, giving `pi` a fixed address restarts only `pi`'s
+interface:
+
+```console
+$ wglink ip lab pi .50
+$ wglink plan
+network lab   wg-lab   10.99.0.0/24   udp/51820
+  ~ pve1  10.99.0.1       peer pi: allowed IPs 10.99.0.3/32 -> 10.99.0.50/32 (live)
+  ~ nas   10.99.0.2       peer pi: allowed IPs 10.99.0.3/32 -> 10.99.0.50/32 (live)
+  ~ pi    10.99.0.50      address 10.99.0.3/24 -> 10.99.0.50/24 (restart)
+
+0 to create, 2 to change live, 1 to restart, 0 to remove.
+Run "wglink apply" to make these changes.
+```
+
+## Reaching machines
+
+| How | Example | Notes |
+| --- | --- | --- |
+| SSH | `--ssh root@192.168.1.10`, `--ssh pi-garage` | Uses your OpenSSH client, keys and `~/.ssh/config`. Runs in batch mode, so it needs key-based login. Opens one connection per node and reuses it. |
+| Local | `--local` | The machine wglink runs on. |
+| Exec | `--exec "docker exec -i web"` | Any command that runs `sh -s` with stdin attached. |
+| Proxmox container | `--pct 101 --via pve1` | Runs `pct exec` on the Proxmox host node `pve1`. |
+
+Add `--sudo` to SSH and local nodes to use `sudo -n` when the login isn't
+root. wglink never asks for or stores a password.
+
+Peers dial each node at its **endpoint**. For SSH nodes the endpoint is the
+host that SSH connects to (as `ssh -G` resolves it), so most nodes need
+nothing more. Other nodes need `--endpoint ADDRESS`. A machine behind NAT that
+nobody can dial gets `--endpoint none --keepalive 25`: it dials out to the
+others and keeps the path open.
+
+## The inventory
+
+The commands above edit `wglink.yaml` for you, keeping its comments and
+layout. You can also edit it by hand. A typical file:
+
+```yaml
+version: 1
+
+defaults:
+  pool: 10.99.0.0/16 # automatic subnets come from here
+  prefix: 24 # size of each automatic subnet
+  port: 51820 # first listen port tried
+
+nodes:
+  pve1:
+    ssh: root@192.168.1.10
+  nas:
+    ssh: admin@nas.lan
+    sudo: true
+    endpoint: 192.168.1.20
+  ct101:
+    pct: {via: pve1, vmid: 101}
+    endpoint: 192.168.1.101
+  laptop:
+    local: true
+    endpoint: none
+    keepalive: 25
+
+networks:
+  lab:
+    members:
+      pve1: auto
+      nas: ".10" # pinned: host 10 of the subnet
+      ct101: auto
+  laptop-nas:
+    members: [laptop, nas]
+```
+
+Each network becomes one WireGuard interface on each member (`wg-lab` here)
+with every other member as a peer. A node can be in several networks.
+
+Network settings, all optional:
+
+| Setting | Default | |
+| --- | --- | --- |
+| `subnet` | the first free `/24` in the pool | IPv4 subnet for tunnel addresses |
+| `port` | the first port from 51820 free on every member | UDP listen port |
+| `iface` | `wg-NAME` | interface name |
+| `mtu` | chosen by wg-quick | |
+| `keepalive` | off | seconds between keepalives, for members behind NAT |
+
+What wglink picks is recorded in `wglink.state.json` next to the inventory, so
+addresses don't move when you add members later. The state file holds public
+keys, addresses and hashes, and no secrets. Keep both files together, for
+example in a private git repository.
 
 ## Status
 
-wglink is very early work in progress and is not ready for production use.
+`wglink status` asks every member for its live WireGuard state and pings each
+peer through the tunnel. Each pair gets one of these states:
 
-## Planned Features
-- Point-to-point WireGuard links
-- Full mesh WireGuard networks
-- Automatic tunnel address selection
-- Manual control over hosts, addresses, and subnets
-- Declarative inventory configuration
-- Detect configuration drift after changes
-- Report tunnel health, handshakes, traffic, and peer reachability
-- Generate private keys on the machines which use them
-- Support SSH and local execution
-- Optional Proxmox Integration
+| State | Meaning |
+| --- | --- |
+| `ok` | A handshake in the last 3 minutes, or a ping reply through the tunnel. |
+| `idle` | No recent handshake, and `--no-ping` was given, so it wasn't tested. |
+| `down` | Both ends are up, but nothing gets through. |
+| `missing` | An end isn't applied yet, or its interface is down. |
+| `unknown` | Neither end could be reached. |
 
-## Requirements
-- Linux
-- SSH access or local access
-- wireguard-tools
-- Go 1.26 or newer (if building wglink from source)
+One reachable end is enough to judge a link. Handshake ages are measured with
+the clock of the node that saw them, so clock differences between machines
+don't skew the result.
+
+For scripts and monitoring:
+
+```sh
+wglink status --exit-code     # exits 2 unless every link is ok
+wglink status --json          # stable JSON: states, handshake ages, round trips, bytes
+wglink status --net lab       # only some networks
+```
+
+On a node, `sudo wglink status --local` shows that machine's WireGuard
+interfaces without needing the inventory. Peers are named from the comments
+wglink writes in its configs. It also runs when no `wglink.yaml` is found.
+
+## How it works
+
+1. **Probe.** For `plan`, wglink connects to every node in parallel and runs
+   a read-only script that reports addresses, routes, UDP ports in use,
+   WireGuard interfaces and their configs, with private keys removed.
+2. **Resolve.** Pinned values come first, then values recorded from earlier
+   runs, then new picks that avoid everything the nodes reported.
+3. **Diff.** wglink renders each member's `wg-quick` config and compares it
+   with what's on the node. Peer changes can load live. Address, port and MTU
+   changes need a restart. A config whose hash no longer matches the last
+   apply was edited by hand.
+4. **Apply.** First, missing keys are created on their nodes with
+   `wg genkey`. Only public keys come back. Then each config is sent without
+   its private key, and the node inserts the key as it writes the file. The
+   change is loaded with `wg syncconf` or by restarting `wg-quick`, through
+   systemd's `wg-quick@IFACE` where it's available, so tunnels come back
+   after a reboot.
+
+The scripts are embedded in the binary and fed to `sh -s` over stdin. They
+are tested under dash, bash and busybox. Only a few `WG_*` variables change
+between runs, and each is validated and quoted.
+
+## Security
+
+- **Private keys stay on their nodes.** Each is created with `wg genkey` on
+  the machine that uses it, stored as `/etc/wireguard/IFACE.key` with mode
+  0600, and never printed. The scripts mask keys in everything they report.
+  The integration tests check that no private key appears in wglink's
+  output, inventory or state.
+- **No secrets on the controller.** The state file holds public keys,
+  addresses and config hashes computed with the secrets removed.
+- **No shell on the controller.** wglink runs commands as argument lists.
+  Values sent to remote shells are validated and single-quoted.
+- **Your SSH setup, unchanged.** wglink uses your SSH client in batch mode
+  with your keys, agent and known hosts, and only ever runs `sudo -n`.
+- **Hands off foreign configs.** wglink marks the files it writes and won't
+  replace a config without that marker unless you pass `--adopt`. It keeps
+  the previous file as `IFACE.conf.prev`.
+
+## Compared with other tools
+
+- **Writing `wg-quick` configs by hand:** wglink writes the same files, but it
+  handles keys and addresses and keeps every peer list in sync across
+  machines.
+- **Mesh VPN platforms** (Tailscale, Headscale, Netmaker, NetBird): those run
+  an agent and a coordination service and handle NAT traversal and
+  roaming. wglink suits machines that can already reach each other, such as a
+  homelab, a rack or a few VPS hosts. Its result is plain WireGuard with
+  nothing running in the background.
+- **Configuration management** (Ansible and similar): wglink is narrower and
+  knows WireGuard. It picks non-conflicting addresses, generates keys on the
+  nodes, loads changes live and checks link health.
+
+## Development
+
+```sh
+go test ./...          # unit tests; node scripts run under dash, bash and busybox if present
+go vet ./...
+```
+
+The integration tests in `test/integration` build the binary and run it
+against real WireGuard interfaces in network namespaces. They change the
+machine they run on, so they need root (or passwordless sudo) and an explicit
+opt-in:
+
+```sh
+WGLINK_INTEGRATION=1 go test -tags integration -v ./test/integration/
+```
+
+CI runs them on every pull request, with the runner itself as a systemd node.
+
+| Package | Role |
+| --- | --- |
+| `cmd/wglink` | entry point |
+| `internal/cli` | commands, flags and output |
+| `internal/config` | `wglink.yaml`: parsing, validation and comment-preserving edits |
+| `internal/ipam` | subnet, port and address selection |
+| `internal/engine` | plan, apply and status |
+| `internal/node` | the embedded scripts and their parsers |
+| `internal/runner` | local, SSH, exec and `pct` transports |
+| `internal/wgconf` | rendering, parsing and comparing `wg-quick` configs |
+| `internal/state` | `wglink.state.json` |
+
+## Roadmap
+
+- **0.2:**
+  - Proxmox VMs through the QEMU guest agent.
+  - Manual peers such as phones, with `wglink export` for their configs.
+  - `apply` that reverts by itself if it cuts off access.
+  - `wglink discover` to add Proxmox guests.
+  - Rebuilding the state file from the nodes.
+- **0.3:**
+  - A terminal UI.
+  - Hub-and-spoke networks.
+  - Routed subnets behind members.
+  - Key rotation.
+  - Preshared keys.
+  - IPv6.
+
+See [CHANGELOG.md](CHANGELOG.md) for what each release added.
 
 ## License
-wglink is licensed under the MIT License.
+
+[MIT](LICENSE)
