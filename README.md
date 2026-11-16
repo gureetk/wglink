@@ -350,6 +350,11 @@ WGLINK_INTEGRATION=1 go test -tags integration -v ./test/integration/
 
 CI runs them on every pull request, with the runner itself as a systemd node.
 
+To release, add the version's section to `CHANGELOG.md`, then push a `vX.Y.Z`
+tag, or run the **release** workflow from the Actions tab with the version
+(and, optionally, a commit). Either way it tests, builds the archives and
+publishes them.
+
 | Package | Role |
 | --- | --- |
 | `cmd/wglink` | entry point |
