@@ -1,8 +1,18 @@
 name: release
 
+# Publishes a release when a vX.Y.Z tag is pushed. It can also be run from the
+# Actions tab: it then tags the chosen commit itself, so no terminal is needed.
 on:
   push:
     tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version to release, such as v0.1.0
+        required: true
+      commit:
+        description: Commit to release (default the branch it runs on)
+        required: false
 
 permissions:
   contents: read
@@ -12,11 +22,28 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write # publish the release
+    env:
+      TAG: ${{ github.event_name == 'push' && github.ref_name || inputs.version }}
+      COMMIT: ${{ inputs.commit || github.sha }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           persist-credentials: false
+      - name: tag the commit
+        if: github.event_name == 'workflow_dispatch'
+        # Locally only, so the go command stamps the version; publish creates the real tag.
+        run: |
+          case $TAG in
+          v[0-9]*.[0-9]*.[0-9]*) ;;
+          *) echo "::error::version must look like v1.2.3, not $TAG"; exit 1 ;;
+          esac
+          if git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then
+            echo "::error::$TAG already exists; push it or pick another version"
+            exit 1
+          fi
+          git checkout -q --detach "$COMMIT"
+          git tag "$TAG"
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version: stable
@@ -24,11 +51,16 @@ jobs:
       - name: test
         run: go test -count=1 ./...
       - name: build
-        run: scripts/release.sh "$GITHUB_REF_NAME"
+        run: scripts/release.sh "$TAG"
       - name: publish
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "$GITHUB_REF_NAME" --verify-tag \
-            --title "wglink $GITHUB_REF_NAME" --notes-file dist/NOTES.md \
-            dist/*.tar.gz dist/SHA256SUMS
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            # Someone made the release on the website; add the files to it.
+            gh release upload "$TAG" --clobber dist/*.tar.gz dist/SHA256SUMS
+          else
+            gh release create "$TAG" --target "$(git rev-parse HEAD)" \
+              --title "wglink $TAG" --notes-file dist/NOTES.md \
+              dist/*.tar.gz dist/SHA256SUMS
+          fi
