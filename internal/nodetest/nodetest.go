@@ -28,7 +28,23 @@ pubkey) sed 's/^priv/pub0/' ;;
 syncconf) cp "$3" "$STUB/synced.$2" ;;
 show)
 	if [ "$2" = all ]; then cat "$STUB/listen" 2>/dev/null; exit 0; fi
-	cat "$STUB/dump.$2" ;;
+	if [ "$2" = interfaces ]; then ls "$STUB/up" 2>/dev/null | tr '\n' ' '; echo; exit 0; fi
+	if [ -e "$STUB/dump.$2" ]; then cat "$STUB/dump.$2"; exit 0; fi
+	# Build a dump from the config; every peer was last seen at $STUB/handshake.
+	hs=$(cat "$STUB/handshake" 2>/dev/null || echo 0)
+	awk -v hs="$hs" '
+	function flush() { if (pk != "") peers[n++] = pk "\t" psk "\t" ep "\t" aips "\t" hs "\t1000\t2000\t" ka }
+	BEGIN { FS = " = " }
+	/^PrivateKey/ { priv = $2 }
+	/^ListenPort/ { port = $2 }
+	/^\[Peer\]/ { flush(); pk = ""; psk = "(none)"; ep = "(none)"; aips = "(none)"; ka = "off"; next }
+	/^PublicKey/ { pk = $2 }
+	/^PresharedKey/ { psk = $2 }
+	/^Endpoint/ { ep = $2 }
+	/^AllowedIPs/ { aips = $2; gsub(/, /, ",", aips) }
+	/^PersistentKeepalive/ { ka = $2 }
+	END { flush(); pub = priv; sub(/^priv/, "pub0", pub); print priv "\t" pub "\t" port "\toff"; for (i = 0; i < n; i++) print peers[i] }
+	' "$STUB_WGDIR/$2.conf" ;;
 esac
 `,
 	"wg-quick": `#!/bin/sh
@@ -65,6 +81,8 @@ grep -qx "$ip" "$STUB/pingable" 2>/dev/null || exit 1
 echo "64 bytes from $ip: icmp_seq=1 ttl=64 time=0.42 ms"
 `,
 	"journalctl": "#!/bin/sh\necho 'journal: handshake failed'\n",
+	// The clock reads $STUB/now when set.
+	"date": "#!/bin/sh\nif [ \"$1\" = +%s ] && [ -e \"$STUB/now\" ]; then cat \"$STUB/now\"; exit 0; fi\nPATH=/usr/bin:/bin\nexec date \"$@\"\n",
 	// Pretend to be root, as wglink requires.
 	"id": "#!/bin/sh\nif [ \"$1\" = -u ]; then echo 0; else exec /usr/bin/id \"$@\"; fi\n",
 }

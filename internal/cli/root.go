@@ -66,6 +66,7 @@ on the machines that use them, and nothing runs in the background.`,
 		a.newIPCmd(),
 		a.newPlanCmd(),
 		a.newApplyCmd(),
+		a.newStatusCmd(),
 	)
 	return root
 }

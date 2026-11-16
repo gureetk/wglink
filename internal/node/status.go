@@ -11,8 +11,9 @@ import (
 
 // Status is a node's live WireGuard state.
 type Status struct {
+	Now    time.Time // the node's clock, which handshake times follow
 	Ifaces map[string]*IfaceStatus
-	Pings  map[netip.Addr]Ping
+	Pings  map[PingTarget]Ping
 }
 
 // IfaceStatus is one interface as wg show reports it.
@@ -21,7 +22,7 @@ type IfaceStatus struct {
 	PublicKey  string
 	ListenPort uint16
 	Peers      []PeerStatus
-	Config     []byte // public form of the config file, if any
+	Config     []byte // public form of the config file; nil if there is none
 }
 
 // PeerStatus is one peer line from wg show dump.
@@ -47,10 +48,15 @@ type PingTarget struct {
 	Addr  netip.Addr
 }
 
+// AllInterfaces asks Status about every WireGuard interface on the node.
+var AllInterfaces = []string{"*"}
+
 // Status reads the interfaces and pings the targets.
 func (n Node) Status(ctx context.Context, ifaces []string, pings []PingTarget) (*Status, error) {
-	if err := checkIfaces(ifaces); err != nil {
-		return nil, err
+	if len(ifaces) != 1 || ifaces[0] != "*" {
+		if err := checkIfaces(ifaces); err != nil {
+			return nil, err
+		}
 	}
 	var targets []string
 	for _, p := range pings {
@@ -70,10 +76,14 @@ func (n Node) Status(ctx context.Context, ifaces []string, pings []PingTarget) (
 }
 
 func parseStatus(out []byte) (*Status, error) {
-	s := &Status{Ifaces: map[string]*IfaceStatus{}, Pings: map[netip.Addr]Ping{}}
+	s := &Status{Ifaces: map[string]*IfaceStatus{}, Pings: map[PingTarget]Ping{}}
 	sawEnd := false
 	for _, d := range parse(out) {
 		switch d.key {
+		case "now":
+			if sec, err := strconv.ParseInt(d.arg, 10, 64); err == nil {
+				s.Now = time.Unix(sec, 0)
+			}
 		case "iface":
 			name, state, _ := strings.Cut(d.arg, " ")
 			st := &IfaceStatus{Up: state == "up"}
@@ -88,21 +98,22 @@ func parseStatus(out []byte) (*Status, error) {
 				st.Config = d.raw
 			}
 		case "ping":
+			// IFACE ADDR ok RTT, or IFACE ADDR fail
 			f := strings.Fields(d.arg)
-			if len(f) < 2 {
+			if len(f) < 3 {
 				continue
 			}
-			a, err := netip.ParseAddr(f[0])
+			a, err := netip.ParseAddr(f[1])
 			if err != nil {
 				continue
 			}
-			p := Ping{OK: f[1] == "ok"}
-			if p.OK && len(f) > 2 {
-				if ms, err := strconv.ParseFloat(f[2], 64); err == nil {
+			p := Ping{OK: f[2] == "ok"}
+			if p.OK && len(f) > 3 {
+				if ms, err := strconv.ParseFloat(f[3], 64); err == nil {
 					p.RTT = time.Duration(ms * float64(time.Millisecond))
 				}
 			}
-			s.Pings[a] = p
+			s.Pings[PingTarget{Iface: f[0], Addr: a}] = p
 		case "end":
 			sawEnd = true
 		}
