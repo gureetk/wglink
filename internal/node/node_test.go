@@ -5,167 +5,24 @@ import (
 	"context"
 	"net/netip"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
 
-	"github.com/gureetk/wglink/internal/runner"
+	"github.com/gureetk/wglink/internal/nodetest"
 	"github.com/gureetk/wglink/internal/wgconf"
 )
 
-// stubs stand in for wg, wg-quick, systemctl, ip, ping and journalctl.
-// They keep state in $STUB and log every call to $STUB/log.
-var stubs = map[string]string{
-	"wg": `#!/bin/sh
-echo "wg $*" >> "$STUB/log"
-case $1 in
-genkey) n=$(cat "$STUB/keyseq" 2>/dev/null || echo 0); n=$((n + 1)); echo "$n" > "$STUB/keyseq"; printf 'priv%039d=\n' "$n" ;;
-pubkey) sed 's/^priv/pub0/' ;;
-syncconf) cp "$3" "$STUB/synced.$2" ;;
-show)
-	if [ "$2" = all ]; then cat "$STUB/listen" 2>/dev/null; exit 0; fi
-	cat "$STUB/dump.$2" ;;
-esac
-`,
-	"wg-quick": `#!/bin/sh
-echo "wg-quick $*" >> "$STUB/log"
-case $1 in
-up) mkdir -p "$STUB/up"; touch "$STUB/up/$2" ;;
-down) rm -f "$STUB/up/$2" ;;
-strip) grep -v '^Address' "$STUB_WGDIR/$2.conf" ;;
-esac
-`,
-	"systemctl": `#!/bin/sh
-echo "systemctl $*" >> "$STUB/log"
-unit=
-for a; do unit=$a; done
-iface=${unit#wg-quick@}
-case $1 in
-is-active) [ -e "$STUB/active/$unit" ] ;;
-restart|start) mkdir -p "$STUB/up" "$STUB/active"; touch "$STUB/up/$iface" "$STUB/active/$unit"; [ ! -e "$STUB/fail" ] ;;
-disable) rm -f "$STUB/up/$iface" "$STUB/active/$unit" ;;
-esac
-`,
-	"ip": `#!/bin/sh
-case "$*" in
-"link show dev "*) [ -e "$STUB/up/$4" ] ;;
-"link del dev "*) rm -f "$STUB/up/$4" ;;
-"-o addr show") cat "$STUB/addr" 2>/dev/null ;;
-"-o -4 route show table all") cat "$STUB/route4" 2>/dev/null ;;
-"-o -6 route show table all") cat "$STUB/route6" 2>/dev/null ;;
-esac
-`,
-	"ping": `#!/bin/sh
-for ip; do :; done
-grep -qx "$ip" "$STUB/pingable" 2>/dev/null || exit 1
-echo "64 bytes from $ip: icmp_seq=1 ttl=64 time=0.42 ms"
-`,
-	"journalctl": "#!/bin/sh\necho 'journal: handshake failed'\n",
-}
-
-// shells lists the shells the scripts must work under.
-func shells(t *testing.T) map[string][]string {
-	out := map[string][]string{}
-	for name, argv := range map[string][]string{
-		"dash":    {"dash"},
-		"bash":    {"bash", "--posix"},
-		"busybox": {"busybox", "sh"},
-	} {
-		if _, err := exec.LookPath(argv[0]); err == nil {
-			out[name] = argv
-		}
-	}
-	if len(out) == 0 {
-		t.Skip("no POSIX shell found")
-	}
-	return out
-}
-
-// needStubbedIP skips tests that rely on the ip stub when the shell runs a
-// built-in ip instead, as some busybox builds do.
-func needStubbedIP(t *testing.T, shell []string) {
-	t.Helper()
-	bin := t.TempDir()
-	stub := filepath.Join(bin, "ip")
-	if err := os.WriteFile(stub, []byte("#!/bin/sh\n"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	cmd := exec.Command(shell[0], append(shell[1:], "-c", "command -v ip")...)
-	cmd.Env = []string{"PATH=" + bin + ":/usr/bin:/bin"}
-	if out, _ := cmd.Output(); strings.TrimSpace(string(out)) != stub {
-		t.Skipf("%s runs its own ip, so the stub can't stand in", shell[0])
-	}
-}
-
-// shRunner runs scripts locally under a chosen shell with the stubs on PATH,
-// and fails the test if a private key ever appears in the output.
-type shRunner struct {
-	t     *testing.T
-	shell []string
-	env   []string
-}
-
-func (r shRunner) String() string { return "test" }
-
-func (r shRunner) Run(ctx context.Context, argv []string, stdin []byte) ([]byte, error) {
-	cmd := exec.CommandContext(ctx, r.shell[0], append(r.shell[1:], argv[1:]...)...)
-	cmd.Stdin = bytes.NewReader(stdin)
-	cmd.Env = r.env
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout, cmd.Stderr = &stdout, &stderr
-	err := cmd.Run()
-	if bytes.Contains(stdout.Bytes(), []byte("priv0")) || bytes.Contains(stderr.Bytes(), []byte("priv0")) {
-		r.t.Errorf("a private key leaked into script output:\n%s\n%s", stdout.String(), stderr.String())
-	}
-	if err != nil {
-		return stdout.Bytes(), &runner.ExitError{Target: "test", Code: cmd.ProcessState.ExitCode(), Stderr: stderr.String()}
-	}
-	return stdout.Bytes(), nil
-}
-
+// env is a fake node and the Node that drives it.
 type env struct {
-	n    Node
-	stub string
-	dir  string
+	*nodetest.Fake
+	n Node
 }
 
 func setup(t *testing.T, shell []string, service string) *env {
 	t.Helper()
-	stub, dir, bin := t.TempDir(), t.TempDir(), t.TempDir()
-	for name, body := range stubs {
-		if err := os.WriteFile(filepath.Join(bin, name), []byte(body), 0o755); err != nil {
-			t.Fatal(err)
-		}
-	}
-	r := shRunner{t: t, shell: shell, env: []string{
-		"PATH=" + bin + ":/usr/bin:/bin",
-		"STUB=" + stub,
-		"STUB_WGDIR=" + dir,
-	}}
-	return &env{n: Node{Runner: r, Dir: dir, Service: service}, stub: stub, dir: dir}
-}
-
-func (e *env) log() string {
-	b, _ := os.ReadFile(filepath.Join(e.stub, "log"))
-	return string(b)
-}
-
-func (e *env) write(t *testing.T, name, content string) {
-	t.Helper()
-	if err := os.WriteFile(filepath.Join(e.stub, name), []byte(content), 0o644); err != nil {
-		t.Fatal(err)
-	}
-}
-
-func (e *env) up(t *testing.T, iface string, active bool) {
-	t.Helper()
-	os.MkdirAll(filepath.Join(e.stub, "up"), 0o755)
-	os.MkdirAll(filepath.Join(e.stub, "active"), 0o755)
-	os.WriteFile(filepath.Join(e.stub, "up", iface), nil, 0o644)
-	if active {
-		os.WriteFile(filepath.Join(e.stub, "active", "wg-quick@"+iface), nil, 0o644)
-	}
+	f := nodetest.New(t, shell, 0)
+	return &env{Fake: f, n: Node{Runner: f.Runner(), Dir: f.Dir, Service: service}}
 }
 
 var ctx = context.Background()
@@ -185,7 +42,7 @@ func rendered(peerPSK bool) []byte {
 }
 
 func TestScripts(t *testing.T) {
-	for name, shell := range shells(t) {
+	for name, shell := range nodetest.Shells(t) {
 		t.Run(name, func(t *testing.T) {
 			t.Run("key", func(t *testing.T) { testKey(t, shell) })
 			t.Run("write", func(t *testing.T) { testWrite(t, shell) })
@@ -204,7 +61,7 @@ func testKey(t *testing.T, shell []string) {
 	if err != nil || !created || pub != pubOf1 {
 		t.Fatalf("EnsureKey = %q, %v, %v", pub, created, err)
 	}
-	fi, err := os.Stat(filepath.Join(e.dir, "wg-lab.key"))
+	fi, err := os.Stat(filepath.Join(e.Dir, "wg-lab.key"))
 	if err != nil || fi.Mode().Perm() != 0o600 {
 		t.Errorf("key file: %v, %v", fi, err)
 	}
@@ -232,24 +89,24 @@ func testWrite(t *testing.T, shell []string) {
 	if wgconf.Hash(pub) != wgconf.Hash(rendered(false)) {
 		t.Errorf("public form on node differs from what was sent:\n%s", pub)
 	}
-	conf, _ := os.ReadFile(filepath.Join(e.dir, "wg-lab.conf"))
+	conf, _ := os.ReadFile(filepath.Join(e.Dir, "wg-lab.conf"))
 	if !strings.Contains(string(conf), "[Interface]\nPrivateKey = priv") {
 		t.Errorf("private key not inserted after [Interface]:\n%s", conf)
 	}
-	if fi, _ := os.Stat(filepath.Join(e.dir, "wg-lab.conf")); fi.Mode().Perm() != 0o600 {
+	if fi, _ := os.Stat(filepath.Join(e.Dir, "wg-lab.conf")); fi.Mode().Perm() != 0o600 {
 		t.Errorf("config mode = %v, want 0600", fi.Mode().Perm())
 	}
-	if log := e.log(); !strings.Contains(log, "systemctl enable --quiet wg-quick@wg-lab") || !strings.Contains(log, "systemctl restart wg-quick@wg-lab") {
+	if log := e.Log(); !strings.Contains(log, "systemctl enable --quiet wg-quick@wg-lab") || !strings.Contains(log, "systemctl restart wg-quick@wg-lab") {
 		t.Errorf("unit not enabled and started:\n%s", log)
 	}
 	// A second write keeps the old file as .prev.
 	if _, err := e.n.Write(ctx, Write{Iface: "wg-lab", Config: rendered(false), Mode: wgconf.Live}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := os.Stat(filepath.Join(e.dir, "wg-lab.conf.prev")); err != nil {
+	if _, err := os.Stat(filepath.Join(e.Dir, "wg-lab.conf.prev")); err != nil {
 		t.Errorf("no .prev backup: %v", err)
 	}
-	entries, _ := os.ReadDir(e.dir)
+	entries, _ := os.ReadDir(e.Dir)
 	for _, en := range entries {
 		if strings.HasSuffix(en.Name(), ".new") || strings.Contains(en.Name(), "strip") {
 			t.Errorf("temp file left behind: %s", en.Name())
@@ -258,43 +115,43 @@ func testWrite(t *testing.T, shell []string) {
 }
 
 func testWriteModes(t *testing.T, shell []string) {
-	needStubbedIP(t, shell)
+	nodetest.NeedStubbedIP(t, shell)
 	e := setup(t, shell, "systemd")
 	e.n.EnsureKey(ctx, "wg-lab")
 
-	e.up(t, "wg-lab", true)
+	e.SetUp("wg-lab", true)
 	if _, err := e.n.Write(ctx, Write{Iface: "wg-lab", Config: rendered(false), Mode: wgconf.Live}); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(e.log(), "wg syncconf wg-lab") || strings.Contains(e.log(), "systemctl restart") {
-		t.Errorf("live change should use syncconf only:\n%s", e.log())
+	if !strings.Contains(e.Log(), "wg syncconf wg-lab") || strings.Contains(e.Log(), "systemctl restart") {
+		t.Errorf("live change should use syncconf only:\n%s", e.Log())
 	}
-	if b, _ := os.ReadFile(filepath.Join(e.stub, "synced.wg-lab")); strings.Contains(string(b), "Address") {
+	if b, _ := os.ReadFile(filepath.Join(e.Stub, "synced.wg-lab")); strings.Contains(string(b), "Address") {
 		t.Errorf("syncconf got an unstripped config:\n%s", b)
 	}
 
 	if _, err := e.n.Write(ctx, Write{Iface: "wg-lab", Config: rendered(false), Mode: wgconf.Restart}); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(e.log(), "systemctl restart wg-quick@wg-lab") {
-		t.Errorf("restart not used:\n%s", e.log())
+	if !strings.Contains(e.Log(), "systemctl restart wg-quick@wg-lab") {
+		t.Errorf("restart not used:\n%s", e.Log())
 	}
 
 	// Without systemd, wg-quick does the work.
 	e = setup(t, shell, "none")
 	e.n.EnsureKey(ctx, "wg-lab")
-	e.up(t, "wg-lab", false)
+	e.SetUp("wg-lab", false)
 	if _, err := e.n.Write(ctx, Write{Iface: "wg-lab", Config: rendered(false), Mode: wgconf.Restart}); err != nil {
 		t.Fatal(err)
 	}
-	if log := e.log(); !strings.Contains(log, "wg-quick down wg-lab\nwg-quick up wg-lab") || strings.Contains(log, "systemctl") {
+	if log := e.Log(); !strings.Contains(log, "wg-quick down wg-lab\nwg-quick up wg-lab") || strings.Contains(log, "systemctl") {
 		t.Errorf("want wg-quick down then up:\n%s", log)
 	}
 
 	// A failing unit reports its journal.
 	e = setup(t, shell, "systemd")
 	e.n.EnsureKey(ctx, "wg-lab")
-	e.write(t, "fail", "")
+	e.WriteStub("fail", "")
 	_, err := e.n.Write(ctx, Write{Iface: "wg-lab", Config: rendered(false), Mode: wgconf.Restart})
 	if err == nil || !strings.Contains(err.Error(), "journal: handshake failed") || !strings.Contains(err.Error(), "failed to start") {
 		t.Errorf("err = %v", err)
@@ -308,12 +165,12 @@ func testPSK(t *testing.T, shell []string) {
 		t.Fatalf("missing psk: %v", err)
 	}
 	psk := "pskpskpskpskpskpskpskpskpskpskpskpskpskpsk="
-	os.WriteFile(filepath.Join(e.dir, "wg-lab.psk.nas"), []byte(psk+"\n"), 0o600)
+	os.WriteFile(filepath.Join(e.Dir, "wg-lab.psk.nas"), []byte(psk+"\n"), 0o600)
 	pub, err := e.n.Write(ctx, Write{Iface: "wg-lab", Config: rendered(true)})
 	if err != nil {
 		t.Fatal(err)
 	}
-	conf, _ := os.ReadFile(filepath.Join(e.dir, "wg-lab.conf"))
+	conf, _ := os.ReadFile(filepath.Join(e.Dir, "wg-lab.conf"))
 	if !strings.Contains(string(conf), "PresharedKey = "+psk+"\n") {
 		t.Errorf("psk not filled in:\n%s", conf)
 	}
@@ -332,17 +189,17 @@ func testRemove(t *testing.T, shell []string) {
 	if _, err := e.n.Write(ctx, Write{Iface: "wg-lab", Config: rendered(false)}); err != nil {
 		t.Fatal(err)
 	}
-	os.WriteFile(filepath.Join(e.dir, "wg-lab.psk.nas"), []byte("x"), 0o600)
-	os.WriteFile(filepath.Join(e.dir, "other.conf"), []byte("[Interface]\n"), 0o600)
+	os.WriteFile(filepath.Join(e.Dir, "wg-lab.psk.nas"), []byte("x"), 0o600)
+	os.WriteFile(filepath.Join(e.Dir, "other.conf"), []byte("[Interface]\n"), 0o600)
 	if err := e.n.Remove(ctx, "wg-lab"); err != nil {
 		t.Fatal(err)
 	}
-	entries, _ := os.ReadDir(e.dir)
+	entries, _ := os.ReadDir(e.Dir)
 	if len(entries) != 1 || entries[0].Name() != "other.conf" {
 		t.Errorf("left behind: %v", entries)
 	}
-	if !strings.Contains(e.log(), "systemctl disable --now --quiet wg-quick@wg-lab") {
-		t.Errorf("unit not disabled:\n%s", e.log())
+	if !strings.Contains(e.Log(), "systemctl disable --now --quiet wg-quick@wg-lab") {
+		t.Errorf("unit not disabled:\n%s", e.Log())
 	}
 	if err := e.n.Remove(ctx, "other"); err == nil || !strings.Contains(err.Error(), "not written by wglink") {
 		t.Errorf("removed a hand-written config: %v", err)
@@ -353,16 +210,16 @@ func testRemove(t *testing.T, shell []string) {
 }
 
 func testProbe(t *testing.T, shell []string) {
-	needStubbedIP(t, shell)
+	nodetest.NeedStubbedIP(t, shell)
 	e := setup(t, shell, "none")
-	e.write(t, "addr", "1: lo    inet 127.0.0.1/8 scope host lo\\       valid_lft forever\n2: eth0@if7    inet 192.168.1.10/24 brd 192.168.1.255 scope global eth0\\       valid_lft forever\n3: wg-lab    inet 10.99.0.1/24 scope global wg-lab\\       valid_lft forever\n")
-	e.write(t, "route4", "default via 192.168.1.1 dev eth0 proto dhcp\n192.168.1.0/24 dev eth0 proto kernel scope link src 192.168.1.10\nlocal 192.168.1.10 dev eth0 table local proto kernel scope host\n")
-	e.write(t, "listen", "wg-lab\t51820\n")
+	e.WriteStub("addr", "1: lo    inet 127.0.0.1/8 scope host lo\\       valid_lft forever\n2: eth0@if7    inet 192.168.1.10/24 brd 192.168.1.255 scope global eth0\\       valid_lft forever\n3: wg-lab    inet 10.99.0.1/24 scope global wg-lab\\       valid_lft forever\n")
+	e.WriteStub("route4", "default via 192.168.1.1 dev eth0 proto dhcp\n192.168.1.0/24 dev eth0 proto kernel scope link src 192.168.1.10\nlocal 192.168.1.10 dev eth0 table local proto kernel scope host\n")
+	e.WriteStub("listen", "wg-lab\t51820\n")
 	e.n.EnsureKey(ctx, "wg-lab")
 	if _, err := e.n.Write(ctx, Write{Iface: "wg-lab", Config: rendered(false)}); err != nil {
 		t.Fatal(err)
 	}
-	os.WriteFile(filepath.Join(e.dir, "wg0.conf"), []byte("[Interface]\nPrivateKey = priv000000000000000000000000000000000000009=\n"), 0o600)
+	os.WriteFile(filepath.Join(e.Dir, "wg0.conf"), []byte("[Interface]\nPrivateKey = priv000000000000000000000000000000000000009=\n"), 0o600)
 
 	f, err := e.n.Probe(ctx, []string{"wg-lab", "wg0", "wg-new"})
 	if err != nil {
@@ -396,13 +253,13 @@ func testProbe(t *testing.T, shell []string) {
 }
 
 func testStatus(t *testing.T, shell []string) {
-	needStubbedIP(t, shell)
+	nodetest.NeedStubbedIP(t, shell)
 	e := setup(t, shell, "none")
-	e.up(t, "wg-lab", false)
-	e.write(t, "dump.wg-lab", "priv000000000000000000000000000000000000001=\t"+pubOf1+"\t51820\toff\n"+
+	e.SetUp("wg-lab", false)
+	e.WriteStub("dump.wg-lab", "priv000000000000000000000000000000000000001=\t"+pubOf1+"\t51820\toff\n"+
 		"peerkeyA\tpriv000000000000000000000000000000000000002=\t192.168.1.20:51820\t10.99.0.2/32\t1700000000\t1024\t2048\t25\n"+
 		"peerkeyB\t(none)\t(none)\t10.99.0.3/32,192.168.50.0/24\t0\t0\t0\toff\n")
-	e.write(t, "pingable", "10.99.0.2\n")
+	e.WriteStub("pingable", "10.99.0.2\n")
 	st, err := e.n.Status(ctx, []string{"wg-lab", "wg-down"}, []PingTarget{
 		{Iface: "wg-lab", Addr: netip.MustParseAddr("10.99.0.2")},
 		{Iface: "wg-lab", Addr: netip.MustParseAddr("10.99.0.3")},
@@ -436,15 +293,15 @@ func testStatus(t *testing.T, shell []string) {
 }
 
 func TestStatusIncludesConfig(t *testing.T) {
-	for name, shell := range shells(t) {
+	for name, shell := range nodetest.Shells(t) {
 		t.Run(name, func(t *testing.T) {
-			needStubbedIP(t, shell)
+			nodetest.NeedStubbedIP(t, shell)
 			e := setup(t, shell, "none")
 			e.n.EnsureKey(ctx, "wg-lab")
 			if _, err := e.n.Write(ctx, Write{Iface: "wg-lab", Config: rendered(false)}); err != nil {
 				t.Fatal(err)
 			}
-			e.write(t, "dump.wg-lab", "priv000000000000000000000000000000000000001=\t"+pubOf1+"\t51820\toff\n")
+			e.WriteStub("dump.wg-lab", "priv000000000000000000000000000000000000001=\t"+pubOf1+"\t51820\toff\n")
 			st, err := e.n.Status(ctx, []string{"wg-lab"}, nil)
 			if err != nil {
 				t.Fatal(err)
