@@ -52,5 +52,17 @@ jobs:
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version: ${{ matrix.go }}
+      - name: install busybox
+        # Node scripts are tested under busybox sh too, as on Alpine.
+        run: command -v busybox || { sudo apt-get update -qq && sudo apt-get install -y -qq busybox; }
       - name: go test
-        run: go test -race -count=1 ./...
+        run: |
+          status=0
+          go test -race -count=1 ./... > test.log 2>&1 || status=$?
+          cat test.log
+          if [ "$status" -ne 0 ]; then
+            # Attach the failures to the run so they show on the pull request.
+            msg=$(grep -v -e '^ok ' -e '^?  ' test.log | tail -n 150 | sed 's/%/%25/g' | awk '{ printf "%s%%0A", $0 }')
+            echo "::error title=go test failed::$msg"
+          fi
+          exit "$status"
