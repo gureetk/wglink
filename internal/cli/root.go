@@ -70,6 +70,7 @@ on the machines that use them, and nothing runs in the background.`,
 		a.newApplyCmd(),
 		a.newRotateCmd(),
 		a.newStatusCmd(),
+		a.newUICmd(),
 		a.newExportCmd(),
 		a.newStateCmd(),
 	)

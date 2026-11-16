@@ -53,6 +53,7 @@ All 3 links are ok.
 - **Health at a glance.** `status` judges every link from handshakes and pings
   through the tunnel. It prints JSON for scripts, gives exit codes for
   monitoring, and has `--local` mode for checking one machine by itself.
+  `wglink ui` keeps it all on screen, with plan and apply a key away.
 - **Agentless.** wglink sends small POSIX `sh` scripts over stdin to the
   machines it manages. They need only `wireguard-tools`, and nothing of
   wglink's stays running on them.
@@ -374,6 +375,30 @@ On a node, `sudo wglink status --local` shows that machine's WireGuard
 interfaces without needing the inventory. Peers are named from the comments
 wglink writes in its configs. It also runs when no `wglink.yaml` is found.
 
+## Dashboard
+
+`wglink ui` opens a dashboard in the terminal with every network and the
+health of its links, checked again every 10 seconds (`--every` changes
+that). Pick a network with the arrow keys, press `p` to see its plan, and
+`a` to apply it after a confirmation, the same as `wglink apply`.
+
+```
+wglink  ~/infra/wglink.yaml  checked 12:04:05
+
+NETWORKS       network lab   wg-lab   10.99.0.0/24   udp/51820
+ ✓ lab 3/3       pve1  10.99.0.1       up
+ ✗ road 0/1      nas   10.99.0.2       up
+                 vps   10.99.0.3       up
+
+                 pve1 <-> nas  ok    rx 45.8 MiB  tx 3.0 MiB
+                 pve1 <-> vps  ok    rx 2.1 MiB  tx 9.3 MiB
+                 nas <-> vps   ok    rx 878.9 KiB  tx 1.1 MiB
+
+               All 3 links are ok.
+
+↑/↓ network · p plan · r check now · q quit
+```
+
 ## How it works
 
 1. **Probe.** For `plan`, wglink connects to every node in parallel and runs
@@ -479,11 +504,13 @@ It removes the old release and tag only after the new build passes.
 | `internal/runner` | local, SSH, exec, `pct` and guest agent transports |
 | `internal/wgconf` | rendering, parsing and comparing `wg-quick` configs |
 | `internal/state` | `wglink.state.json` |
+| `internal/tui` | the `wglink ui` dashboard |
 
 ## Roadmap
 
-- **0.3:**
-  - A terminal UI.
+Ideas for later:
+
+- Adding nodes and networks from the dashboard.
 
 See [CHANGELOG.md](CHANGELOG.md) for what each release added.
 

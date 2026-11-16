@@ -58,6 +58,9 @@ Notable changes to wglink. The format follows
   - Hubs forward IPv6 for their interface alone on Linux 6.17 and later;
     `plan` warns when an older hub forwards no IPv6.
   - Routed subnets can be IPv6 too.
+- `wglink ui`, a terminal dashboard: every network with the health of its
+  links, checked again every few seconds, with plan and apply for the
+  selected network a key away.
 
 ### Fixed
 
