@@ -2,3 +2,4 @@
 /dist/
 /wglink.yaml
 /wglink.state.json
+/.wglink.state.json.lock

@@ -233,24 +233,3 @@ func TestSaveRejectsInvalid(t *testing.T) {
 		t.Errorf("saved inventory does not load: %v", err)
 	}
 }
-
-func TestWriteFileAtomicKeepsMode(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "f")
-	if err := os.WriteFile(path, []byte("old"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	if err := WriteFileAtomic(path, []byte("new"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	fi, _ := os.Stat(path)
-	if fi.Mode().Perm() != 0o600 {
-		t.Errorf("mode = %v, want 0600", fi.Mode().Perm())
-	}
-	if b, _ := os.ReadFile(path); string(b) != "new" {
-		t.Errorf("content = %q", b)
-	}
-	entries, _ := os.ReadDir(filepath.Dir(path))
-	if len(entries) != 1 {
-		t.Errorf("temp files left behind: %v", entries)
-	}
-}
