@@ -78,6 +78,14 @@ func (s *Session) Apply(ctx context.Context, p *Plan, logf Logf) error {
 		}
 	}
 
+	// Then preshared keys, stored on both members of a pair before either
+	// config refers to them.
+	for _, np := range p.Networks {
+		if err := s.storePSKs(ctx, p, np, logf); err != nil {
+			return err
+		}
+	}
+
 	// Phase 2: configs, one node at a time, now that every key is known.
 	for _, np := range p.Networks {
 		n := s.Inv.Networks[np.Name]

@@ -4,6 +4,7 @@ import (
 	"net/netip"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -28,6 +29,7 @@ func TestRoundTrip(t *testing.T) {
 	pve.IP = netip.MustParseAddr("10.99.0.1")
 	pve.PubKey = "q3F4sTqKG6c4kBxD7l6ZXpXwFfXoXJpPq2mWm3c1yE0="
 	pve.Applied = "abc"
+	pve.PSKs = map[string]string{"nas": "def"}
 	lab.Member("nas").IP = netip.MustParseAddr("10.99.0.10")
 	st.Net("empty")
 	if err := st.Save(dir); err != nil {
@@ -46,7 +48,7 @@ func TestRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if g := got.Networks["lab"].Members["pve1"]; *g != *pve {
+	if g := got.Networks["lab"].Members["pve1"]; !reflect.DeepEqual(g, pve) {
 		t.Errorf("pve1 = %+v, want %+v", g, pve)
 	}
 	if got.Networks["empty"].Members == nil {

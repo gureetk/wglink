@@ -63,3 +63,23 @@ func TestWithPrivateKey(t *testing.T) {
 		t.Errorf("got %q", got)
 	}
 }
+
+func TestPresharedKeys(t *testing.T) {
+	a, err := GeneratePSK()
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, _ := GeneratePSK()
+	if !ValidKey(a) || a == b {
+		t.Errorf("GeneratePSK: %q, %q", a, b)
+	}
+	// sha256 of "abc\n", as sha256sum prints it.
+	if h := PSKHash("abc"); h != "edeaaff3f1774ad2888673770c6d64097e391bc362d7d6fb34982ddf0efd18cb" {
+		t.Errorf("PSKHash = %s", h)
+	}
+	text := []byte("[Peer]\n# nas\nPresharedKey = @nas\n[Peer]\n# pi\nPresharedKey = @pi\n")
+	got := string(WithPresharedKeys(text, map[string]string{"nas": a}))
+	if got != "[Peer]\n# nas\nPresharedKey = "+a+"\n[Peer]\n# pi\nPresharedKey = @pi\n" {
+		t.Errorf("WithPresharedKeys:\n%s", got)
+	}
+}

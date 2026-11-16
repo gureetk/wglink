@@ -265,3 +265,22 @@ func TestRoutesCommand(t *testing.T) {
 		t.Errorf("routes not cleared: %+v", m)
 	}
 }
+
+func TestPSKFlags(t *testing.T) {
+	dir := newInventory(t)
+	wg(t, dir, "connect", "pve1", "nas", "--name", "lab", "--psk")
+	if !load(t, dir).Networks["lab"].PSK {
+		t.Error("connect --psk didn't turn preshared keys on")
+	}
+	if out := wg(t, dir, "net", "show", "lab"); !strings.Contains(out, "psk        on (each pair of peers shares one)") {
+		t.Errorf("net show:\n%s", out)
+	}
+	wg(t, dir, "net", "set", "lab", "--psk=false")
+	if load(t, dir).Networks["lab"].PSK {
+		t.Error("--psk=false left preshared keys on")
+	}
+	wg(t, dir, "net", "create", "backup", "--psk")
+	if !load(t, dir).Networks["backup"].PSK {
+		t.Error("net create --psk didn't turn preshared keys on")
+	}
+}

@@ -244,6 +244,25 @@ The other members then send 192.168.50.0/24 through `nas`. For that to work:
 In `wglink.yaml` the routes live on the member:
 `nas: {routes: [192.168.50.0/24]}`.
 
+## Preshared keys
+
+WireGuard can mix a preshared key into each pair's handshake on top of the
+key pairs, a second layer that guards against a future break of Curve25519.
+Turn it on for a network:
+
+```sh
+wglink connect pve1 nas vps --name lab --psk
+wglink net set lab --psk          # or for an existing network
+```
+
+`apply` then makes a key for every pair of peers and stores it on both, as
+`/etc/wireguard/IFACE.psk.PEER` with mode 0600, before either config uses
+it. `plan` compares keys by their SHA-256 hashes, so it can tell when a pair
+doesn't match, or a new key isn't loaded yet, without the keys leaving the
+nodes. `wglink rotate` replaces a member's preshared keys along with its key
+pair. For a phone, each `wglink export` makes new keys: its peers store
+theirs, and the config carries the phone's.
+
 ## The inventory
 
 The commands above edit `wglink.yaml` for you, keeping its comments and
@@ -295,6 +314,7 @@ Network settings, all optional:
 | `mtu` | chosen by wg-quick | |
 | `keepalive` | off | seconds between keepalives, for members behind NAT |
 | `hub` | none: a full mesh | member the others connect through |
+| `psk` | off | a preshared key for each pair of peers |
 
 What wglink picks is recorded in `wglink.state.json` next to the inventory, so
 addresses don't move when you add members later. The state file holds public
@@ -371,8 +391,14 @@ between runs, and each is validated and quoted.
   on the members and hands their peers the new public keys, all loaded live.
   If a rotation is interrupted, the next `plan` notices a config or
   interface still using the old key and loads the new one.
+- **Optional preshared keys.** With `--psk`, wglink makes a key for each
+  pair from the operating system's random source and sends it to both
+  members over the same connection as the scripts, on standard input. It
+  never writes them on the controller; nodes report only their hashes. The
+  tests fail if a preshared key shows up in any script's output.
 - **No secrets on the controller.** The state file holds public keys,
-  addresses and config hashes computed with the secrets removed.
+  addresses, and hashes of configs and preshared keys, with the secrets
+  removed before hashing.
 - **No shell on the controller.** wglink runs commands as argument lists.
   Values sent to remote shells are validated and single-quoted.
 - **Your SSH setup, unchanged.** wglink uses your SSH client in batch mode
@@ -435,7 +461,6 @@ It removes the old release and tag only after the new build passes.
 
 - **0.3:**
   - A terminal UI.
-  - Preshared keys.
   - IPv6.
 
 See [CHANGELOG.md](CHANGELOG.md) for what each release added.

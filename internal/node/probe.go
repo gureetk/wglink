@@ -58,6 +58,9 @@ type Iface struct {
 	// The public keys of the private key in the config file and of the
 	// running interface; either can lag behind the key file.
 	ConfPub, LivePub string
+	// Hashes of preshared keys by peer name: in their files, and as the
+	// config file has them.
+	PSKFile, PSKConf map[string]string
 }
 
 // StaleKey reports whether the config file or the running interface still
@@ -108,7 +111,7 @@ func parseProbe(out []byte) (*Facts, error) {
 			iface, network, _ := strings.Cut(d.arg, " ")
 			f.Managed[iface] = network
 		case "iface":
-			cur = &Iface{}
+			cur = &Iface{PSKFile: map[string]string{}, PSKConf: map[string]string{}}
 			f.Ifaces[d.arg] = cur
 		case "conf":
 			if cur != nil {
@@ -129,6 +132,10 @@ func parseProbe(out []byte) (*Facts, error) {
 		case "livepub":
 			if cur != nil {
 				cur.LivePub = d.arg
+			}
+		case "pskfile", "pskconf":
+			if peer, hash, ok := strings.Cut(d.arg, " "); cur != nil && ok {
+				map[string]map[string]string{"pskfile": cur.PSKFile, "pskconf": cur.PSKConf}[d.key][peer] = hash
 			}
 		case "section":
 			switch d.arg {
