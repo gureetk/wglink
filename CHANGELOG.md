@@ -16,6 +16,13 @@ Notable changes to wglink. The format follows
     the first run.
   - `plan` says when a device's config is out of date, and `status` judges
     its links from the other end.
+- Safe changes over SSH:
+  - Before changing an SSH node, `apply` arms a systemd timer there that
+    restores the previous config, then cancels it over a new SSH connection.
+  - If the change cut off the route wglink uses, the node undoes the change
+    by itself after a minute.
+  - `--no-revert` turns this off, and `plan` warns about SSH nodes without
+    systemd.
 
 ## [0.1.0] - 2026-11-16
 

@@ -12,7 +12,9 @@ import (
 	"net/netip"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/gureetk/wglink/internal/runner"
 	"github.com/gureetk/wglink/internal/wgconf"
@@ -121,6 +123,9 @@ type Write struct {
 	Config []byte        // from wgconf.Render
 	Mode   wgconf.Change // Live or Restart
 	Adopt  bool          // replace a config wglink didn't write
+	// Revert, if set, has systemd undo the change after this long unless
+	// Confirm runs first.
+	Revert time.Duration
 }
 
 // Write installs and loads a config, and returns its public form as now on disk.
@@ -147,6 +152,7 @@ func (n Node) Write(ctx context.Context, w Write) ([]byte, error) {
 	}
 	out, err := n.run(ctx, "write", map[string]string{
 		"WG_IFACE": w.Iface, "WG_CONFIG": string(w.Config), "WG_MODE": mode, "WG_ADOPT": adopt,
+		"WG_REVERT": strconv.Itoa(int(w.Revert.Seconds())),
 	})
 	if err != nil {
 		return nil, err
@@ -157,6 +163,16 @@ func (n Node) Write(ctx context.Context, w Write) ([]byte, error) {
 		}
 	}
 	return nil, fmt.Errorf("%s: write of %s printed no config", n.Runner, w.Iface)
+}
+
+// Confirm keeps a change made by Write with Revert set. It fails if the
+// timer has already undone the change.
+func (n Node) Confirm(ctx context.Context, iface string) error {
+	if err := checkIfaces([]string{iface}); err != nil {
+		return err
+	}
+	_, err := n.run(ctx, "confirm", map[string]string{"WG_IFACE": iface})
+	return err
 }
 
 // Remove stops the interface and deletes wglink's files for it.

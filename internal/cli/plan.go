@@ -74,14 +74,19 @@ Nothing is changed. Problems listed under "problems" stop apply until fixed.`,
 
 func (a *app) newApplyCmd() *cobra.Command {
 	var sc scope
-	var adopt, yes bool
+	var adopt, yes, noRevert bool
 	cmd := &cobra.Command{
 		Use:   "apply",
 		Short: "Make the nodes match wglink.yaml",
 		Long: `Show the plan, ask for confirmation, then change the nodes: remove interfaces
 that are no longer wanted, create missing keys on their own nodes, and write
 configs one node at a time. It stops at the first failure; running it again
-picks up where it stopped.`,
+picks up where it stopped.
+
+Each change to an SSH node is confirmed over a new SSH connection. If that
+fails, for example because the change cut off the route wglink uses, the
+node puts its previous config back after a minute. This needs systemd on the
+node; --no-revert turns it off.`,
 		GroupID: "run",
 		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
@@ -89,7 +94,7 @@ picks up where it stopped.`,
 			if err != nil {
 				return err
 			}
-			p, err := s.Plan(cmd.Context(), engine.Options{Networks: sc.nets, Nodes: sc.nodes, Adopt: adopt})
+			p, err := s.Plan(cmd.Context(), engine.Options{Networks: sc.nets, Nodes: sc.nodes, Adopt: adopt, NoRevert: noRevert})
 			if err != nil {
 				return err
 			}
@@ -126,6 +131,7 @@ picks up where it stopped.`,
 	sc.add(cmd)
 	cmd.Flags().BoolVar(&adopt, "adopt", false, "replace configs wglink didn't write")
 	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "don't ask for confirmation")
+	cmd.Flags().BoolVar(&noRevert, "no-revert", false, "don't have SSH nodes undo a change that wglink can't confirm")
 	return cmd
 }
 

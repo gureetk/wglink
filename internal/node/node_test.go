@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/gureetk/wglink/internal/nodetest"
 	"github.com/gureetk/wglink/internal/wgconf"
@@ -51,6 +52,7 @@ func TestScripts(t *testing.T) {
 			t.Run("remove", func(t *testing.T) { testRemove(t, shell) })
 			t.Run("probe", func(t *testing.T) { testProbe(t, shell) })
 			t.Run("status", func(t *testing.T) { testStatus(t, shell) })
+			t.Run("revert", func(t *testing.T) { testRevert(t, shell) })
 		})
 	}
 }
@@ -111,6 +113,76 @@ func testWrite(t *testing.T, shell []string) {
 		if strings.HasSuffix(en.Name(), ".new") || strings.Contains(en.Name(), "strip") {
 			t.Errorf("temp file left behind: %s", en.Name())
 		}
+	}
+}
+
+func testRevert(t *testing.T, shell []string) {
+	nodetest.NeedStubbedIP(t, shell)
+	e := setup(t, shell, "systemd")
+	e.n.EnsureKey(ctx, "wg-lab")
+	conf := filepath.Join(e.Dir, "wg-lab.conf")
+	read := func() string { b, _ := os.ReadFile(conf); return string(b) }
+	v1, v2 := rendered(false), bytes.Replace(rendered(false), []byte("51820"), []byte("51821"), 1)
+	if _, err := e.n.Write(ctx, Write{Iface: "wg-lab", Config: v1}); err != nil {
+		t.Fatal(err)
+	}
+	if e.Timer("wg-lab") {
+		t.Fatal("a write without Revert armed a timer")
+	}
+	before := read()
+
+	// Unconfirmed, the timer puts the old config back and restarts.
+	if _, err := e.n.Write(ctx, Write{Iface: "wg-lab", Config: v2, Revert: time.Minute}); err != nil {
+		t.Fatal(err)
+	}
+	if !e.Timer("wg-lab") || !strings.Contains(e.Log(), "systemd-run --quiet --collect --unit=wglink-revert-wg-lab --on-active=60s") {
+		t.Fatalf("no timer armed:\n%s", e.Log())
+	}
+	if !strings.Contains(read(), "ListenPort = 51821") {
+		t.Fatalf("new config not written:\n%s", read())
+	}
+	e.FireRevert("wg-lab")
+	if read() != before {
+		t.Errorf("revert left:\n%s\nwant:\n%s", read(), before)
+	}
+	if !strings.HasSuffix(strings.TrimSpace(e.Log()), "systemctl restart wg-quick@wg-lab") {
+		t.Errorf("revert didn't restart the unit:\n%s", e.Log())
+	}
+	if err := e.n.Confirm(ctx, "wg-lab"); err == nil || !strings.Contains(err.Error(), "already undid the change") {
+		t.Errorf("confirm after the timer fired: %v", err)
+	}
+
+	// Confirmed, the change stays and nothing is left behind.
+	if _, err := e.n.Write(ctx, Write{Iface: "wg-lab", Config: v2, Revert: time.Minute}); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.n.Confirm(ctx, "wg-lab"); err != nil {
+		t.Fatal(err)
+	}
+	if e.Timer("wg-lab") || !strings.Contains(read(), "ListenPort = 51821") {
+		t.Errorf("after confirm: timer %v, config:\n%s", e.Timer("wg-lab"), read())
+	}
+	for _, f := range []string{"wg-lab.conf.revert", ".wg-lab.revert"} {
+		if _, err := os.Stat(filepath.Join(e.Dir, f)); err == nil {
+			t.Errorf("%s left behind", f)
+		}
+	}
+
+	// A new interface that isn't confirmed is taken down again.
+	e.n.EnsureKey(ctx, "wg-new")
+	if _, err := e.n.Write(ctx, Write{Iface: "wg-new", Config: v1, Revert: 30 * time.Second}); err != nil {
+		t.Fatal(err)
+	}
+	e.FireRevert("wg-new")
+	if _, err := os.Stat(filepath.Join(e.Dir, "wg-new.conf")); err == nil || !strings.Contains(e.Log(), "systemctl disable --now wg-quick@wg-new") {
+		t.Errorf("new interface not taken down:\n%s", e.Log())
+	}
+
+	// Without systemd there's no timer, so the write refuses.
+	none := setup(t, shell, "none")
+	none.n.EnsureKey(ctx, "wg-lab")
+	if _, err := none.n.Write(ctx, Write{Iface: "wg-lab", Config: v1, Revert: time.Minute}); err == nil || !strings.Contains(err.Error(), "needs systemd") {
+		t.Errorf("revert without systemd: %v", err)
 	}
 }
 
