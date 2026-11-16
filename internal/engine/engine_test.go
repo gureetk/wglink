@@ -46,6 +46,14 @@ nodes:
 networks:
 `
 
+// sessionErr is session, returning an invalid inventory's error.
+func (l *lab) sessionErr(yaml string) (*Session, error) {
+	if _, err := config.Parse("wglink.yaml", []byte(yaml)); err != nil {
+		return nil, err
+	}
+	return l.session(yaml), nil
+}
+
 // session loads yaml and the lab's state, wired to the fakes.
 func (l *lab) session(yaml string) *Session {
 	l.t.Helper()

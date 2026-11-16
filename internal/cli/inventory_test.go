@@ -222,3 +222,25 @@ func TestEmptyLists(t *testing.T) {
 		t.Errorf("net list: %s", out)
 	}
 }
+
+func TestHubFlags(t *testing.T) {
+	dir := newInventory(t)
+	wg(t, dir, "connect", "pve1", "nas", "ct101", "--name", "lab", "--hub", "pve1")
+	if n := load(t, dir).Networks["lab"]; n.Hub != "pve1" {
+		t.Errorf("hub = %q", n.Hub)
+	}
+	if out := wg(t, dir, "net", "show", "lab"); !strings.Contains(out, "hub        pve1 (the others connect through it)") {
+		t.Errorf("net show:\n%s", out)
+	}
+	if out := wg(t, dir, "net", "list"); !strings.Contains(out, "pve1 (hub),nas,ct101") {
+		t.Errorf("net list:\n%s", out)
+	}
+	wgErr(t, dir, "hub: ghost isn't a member", "net", "set", "lab", "--hub", "ghost")
+	wg(t, dir, "net", "set", "lab", "--hub", "none")
+	if n := load(t, dir).Networks["lab"]; n.Hub != "" {
+		t.Errorf("hub after --hub none = %q", n.Hub)
+	}
+	if out := wg(t, dir, "net", "show", "lab"); !strings.Contains(out, "topology   full mesh") {
+		t.Errorf("net show:\n%s", out)
+	}
+}

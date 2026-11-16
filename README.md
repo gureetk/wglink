@@ -35,8 +35,9 @@ All 3 links are ok.
 
 ## Features
 
-- **Full-mesh networks** between any Linux machines: bare metal, VMs,
-  containers, Raspberry Pis, Proxmox hosts and their guests.
+- **Full-mesh or hub-and-spoke networks** between any Linux machines: bare
+  metal, VMs, containers, Raspberry Pis, Proxmox hosts and their guests, plus
+  phones and other devices you set up by hand.
 - **Automatic addressing that stays put.** Subnets, ports and tunnel
   addresses are picked for you, kept across runs, and chosen to avoid
   addresses, routes and ports already in use on each machine. Pin any of them
@@ -209,6 +210,21 @@ the public key. If the device already has a key, pass its public key with
 member joined or moved, `wglink plan` says so and `wglink export` gives the
 new one.
 
+## Hub and spoke
+
+By default every member of a network connects to every other. With a hub,
+members connect only to the hub, which passes traffic between them. This
+helps when only one machine can be reached from everywhere, such as a VPS,
+or for laptops and phones on the road:
+
+```sh
+wglink connect vps laptop phone --name road --hub vps
+```
+
+Spokes send the whole network's traffic to the hub. The hub turns on
+forwarding for its WireGuard interface alone when that comes up, through a
+`PostUp` line in its config, so nothing else on the machine changes.
+
 ## The inventory
 
 The commands above edit `wglink.yaml` for you, keeping its comments and
@@ -259,6 +275,7 @@ Network settings, all optional:
 | `iface` | `wg-NAME` | interface name |
 | `mtu` | chosen by wg-quick | |
 | `keepalive` | off | seconds between keepalives, for members behind NAT |
+| `hub` | none: a full mesh | member the others connect through |
 
 What wglink picks is recorded in `wglink.state.json` next to the inventory, so
 addresses don't move when you add members later. The state file holds public
@@ -395,7 +412,6 @@ It removes the old release and tag only after the new build passes.
 
 - **0.3:**
   - A terminal UI.
-  - Hub-and-spoke networks.
   - Routed subnets behind members.
   - Key rotation.
   - Preshared keys.

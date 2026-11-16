@@ -113,12 +113,15 @@ func (n *Node) Reach() Reach {
 type Network struct {
 	Name string `yaml:"-"`
 
-	Subnet    Subnet  `yaml:"subnet"`
-	Port      int     `yaml:"port"`
-	Iface     string  `yaml:"iface"`
-	MTU       int     `yaml:"mtu"`
-	Keepalive int     `yaml:"keepalive"`
-	Members   Members `yaml:"members"`
+	Subnet    Subnet `yaml:"subnet"`
+	Port      int    `yaml:"port"`
+	Iface     string `yaml:"iface"`
+	MTU       int    `yaml:"mtu"`
+	Keepalive int    `yaml:"keepalive"`
+	// Hub is the member every other member connects through. Empty means a
+	// full mesh, where every member connects to every other.
+	Hub     string  `yaml:"hub"`
+	Members Members `yaml:"members"`
 }
 
 // IfaceName returns the interface name used on every member.
@@ -130,6 +133,12 @@ func (n *Network) IfaceName() string {
 }
 
 // Member returns the named member, if present.
+// Linked reports whether two members connect directly: always in a full
+// mesh, and only to or from the hub in a hub network.
+func (n *Network) Linked(a, b string) bool {
+	return a != b && (n.Hub == "" || a == n.Hub || b == n.Hub)
+}
+
 func (n *Network) Member(name string) (Member, bool) {
 	for _, m := range n.Members {
 		if m.Name == name {
@@ -357,7 +366,7 @@ var fields = map[string][]string{
 	"node":      {"ssh", "local", "exec", "pct", "qm", "manual", "sudo", "endpoint", "keepalive", "service"},
 	"guestref":  {"via", "vmid"},
 	"manual":    {"pubkey"},
-	"network":   {"subnet", "port", "iface", "mtu", "keepalive", "members"},
+	"network":   {"subnet", "port", "iface", "mtu", "keepalive", "hub", "members"},
 	"member":    {"ip"},
 }
 

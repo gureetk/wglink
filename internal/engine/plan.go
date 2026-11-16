@@ -530,8 +530,9 @@ func (s *Session) desired(ctx context.Context, p *Plan, n *config.Network, membe
 	if k := s.Inv.Nodes[member].Keepalive; k != 0 {
 		keepalive = k
 	}
+	i.Forward = n.Hub != "" && member == n.Hub
 	for _, peer := range n.Members {
-		if peer.Name == member {
+		if !n.Linked(member, peer.Name) {
 			continue
 		}
 		key := p.keys[n.Name][peer.Name]
@@ -545,10 +546,14 @@ func (s *Session) desired(ctx context.Context, p *Plan, n *config.Network, membe
 		if e, err := s.Endpoint(ctx, peer.Name); err == nil && !e.None {
 			endpoint = e.Dial(a.Port)
 		}
+		allowed := []netip.Prefix{netip.PrefixFrom(a.Addrs[peer.Name], 32)}
+		if peer.Name == n.Hub {
+			allowed = []netip.Prefix{a.Subnet} // the rest of the network is behind the hub
+		}
 		i.Peers = append(i.Peers, wgconf.Peer{
 			Name:       peer.Name,
 			PublicKey:  key,
-			AllowedIPs: []netip.Prefix{netip.PrefixFrom(a.Addrs[peer.Name], 32)},
+			AllowedIPs: allowed,
 			Endpoint:   endpoint,
 			Keepalive:  keepalive,
 		})
@@ -563,7 +568,7 @@ func (s *Session) warnUnreachablePairs(ctx context.Context, p *Plan, n *config.N
 	}
 	for i, a := range n.Members {
 		for _, b := range n.Members[i+1:] {
-			if !dialable(a.Name) && !dialable(b.Name) {
+			if n.Linked(a.Name, b.Name) && !dialable(a.Name) && !dialable(b.Name) {
 				p.warn("network %s: neither %s nor %s has an endpoint, so they can't reach each other", n.Name, a.Name, b.Name)
 			}
 		}

@@ -145,6 +145,9 @@ func (inv *Inventory) validateNetwork(n *Network) []error {
 	if n.Keepalive < 0 || n.Keepalive > 65535 {
 		add("keepalive: %d must be 0-65535 seconds", n.Keepalive)
 	}
+	if _, ok := n.Member(n.Hub); n.Hub != "" && !ok {
+		add("hub: %s isn't a member", n.Hub)
+	}
 	seenNode := map[string]bool{}
 	seenAddr := map[netip.Addr]string{}
 	for _, m := range n.Members {
