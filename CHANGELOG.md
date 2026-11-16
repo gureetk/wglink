@@ -27,6 +27,11 @@ Notable changes to wglink. The format follows
   addresses. `--add` adds the running ones as nodes.
 - `wglink state rebuild` recovers a lost or stale `wglink.state.json` from
   the configs on the nodes. It keeps the old file as `.bak`.
+- Hub-and-spoke networks:
+  - `--hub NODE` on `connect`, `net create` and `net set`.
+  - Spokes connect only to the hub and send the whole network through it.
+  - The hub turns on forwarding for its WireGuard interface alone.
+  - `status` shows the hub's links.
 
 ### Fixed
 

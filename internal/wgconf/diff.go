@@ -38,6 +38,9 @@ func Compare(old, new Interface) (Change, []string) {
 	if old.MTU != new.MTU {
 		bump(Restart, "mtu %s -> %s", orAuto(old.MTU), orAuto(new.MTU))
 	}
+	if old.Forward != new.Forward {
+		bump(Restart, "forwarding %s", onOff(new.Forward))
+	}
 
 	oldPeers := peerMap(old.Peers)
 	newPeers := peerMap(new.Peers)

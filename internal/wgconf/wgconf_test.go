@@ -197,3 +197,25 @@ func TestCompare(t *testing.T) {
 		})
 	}
 }
+
+func TestForwarding(t *testing.T) {
+	hub := Interface{Network: "lab", Addresses: []netip.Prefix{netip.MustParsePrefix("10.99.0.1/24")}, Forward: true}
+	text := Render(hub)
+	if !strings.Contains(string(text), "\nPostUp = echo 1 > /proc/sys/net/ipv4/conf/%i/forwarding\n") {
+		t.Fatalf("rendered:\n%s", text)
+	}
+	back, err := Parse(text)
+	if err != nil || !back.Forward {
+		t.Fatalf("parsed back: %+v, %v", back, err)
+	}
+	spoke := hub
+	spoke.Forward = false
+	if c, why := Compare(spoke, hub); c != Restart || strings.Join(why, ",") != "forwarding on" {
+		t.Errorf("compare = %v %v", c, why)
+	}
+	// Someone else's PostUp isn't wglink's forwarding hook.
+	other, _ := Parse([]byte("[Interface]\nAddress = 10.99.0.1/24\nPostUp = iptables -A FORWARD -i %i -j ACCEPT\n"))
+	if other.Forward {
+		t.Error("a different PostUp counted as forwarding")
+	}
+}

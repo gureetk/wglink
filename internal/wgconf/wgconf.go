@@ -26,8 +26,13 @@ type Interface struct {
 	Addresses  []netip.Prefix
 	ListenPort uint16
 	MTU        int
+	Forward    bool // pass traffic between peers, as a hub does
 	Peers      []Peer
 }
+
+// ForwardHook turns on IPv4 forwarding for the interface alone when it comes
+// up, so a hub can pass traffic between its peers.
+const ForwardHook = "echo 1 > /proc/sys/net/ipv4/conf/%i/forwarding"
 
 // Peer is one [Peer] section.
 type Peer struct {
@@ -55,6 +60,9 @@ func Render(i Interface) []byte {
 	}
 	if i.MTU != 0 {
 		fmt.Fprintf(&b, "MTU = %d\n", i.MTU)
+	}
+	if i.Forward {
+		fmt.Fprintf(&b, "PostUp = %s\n", ForwardHook)
 	}
 	peers := slices.Clone(i.Peers)
 	slices.SortFunc(peers, func(a, b Peer) int { return strings.Compare(a.Name, b.Name) })
@@ -176,6 +184,10 @@ func (i *Interface) set(key, val string) error {
 		n, err := strconv.Atoi(val)
 		i.MTU = n
 		return err
+	case "postup":
+		if val == ForwardHook {
+			i.Forward = true
+		}
 	}
 	return nil // other wg-quick keys don't affect wglink
 }

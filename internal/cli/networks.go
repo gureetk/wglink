@@ -32,7 +32,7 @@ func (a *app) newNetCmd() *cobra.Command {
 
 // netFlags are the settings a network can be created or changed with.
 type netFlags struct {
-	subnet, port, mtu, keepalive, iface string
+	subnet, port, mtu, keepalive, iface, hub string
 }
 
 func (f *netFlags) add(cmd *cobra.Command, set bool) {
@@ -45,6 +45,11 @@ func (f *netFlags) add(cmd *cobra.Command, set bool) {
 	fl.StringVar(&f.port, "port", "", "UDP listen port on every member (default: first free from 51820"+auto+")")
 	fl.StringVar(&f.mtu, "mtu", "", "interface MTU (default: wg-quick decides"+auto+")")
 	fl.StringVar(&f.keepalive, "keepalive", "", "keepalive interval in seconds for every member (0 is off)")
+	none := ""
+	if set {
+		none = `, or "none"`
+	}
+	fl.StringVar(&f.hub, "hub", "", "member the others connect through, instead of all to all"+none)
 	if set {
 		fl.StringVar(&f.iface, "iface", "", `interface name, or "auto" for wg-<network>`)
 	}
@@ -103,6 +108,13 @@ func (f *netFlags) fields(cmd *cobra.Command) ([]config.Field, error) {
 	if err := str("iface", "iface", f.iface, checkIface); err != nil {
 		return nil, err
 	}
+	if cmd.Flags().Changed("hub") {
+		if f.hub == "none" {
+			out = append(out, config.Field{Key: "hub"})
+		} else {
+			out = append(out, config.Field{Key: "hub", Value: f.hub})
+		}
+	}
 	return out, nil
 }
 
@@ -130,11 +142,13 @@ func (a *app) newConnectCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "connect NODE NODE [NODE...]",
 		Short: "Join nodes in a network, creating it if needed",
-		Long: `Join nodes in a full mesh. Without --name, two nodes get a network named after
-them and more get net1, net2, and so on. Addresses are automatic unless pinned
-with --ip, as a host part (nas=.10) or a full address (nas=10.99.0.10).`,
+		Long: `Join nodes in a full mesh, or with --hub, all through one of them. Without
+--name, two nodes get a network named after them and more get net1, net2, and
+so on. Addresses are automatic unless pinned with --ip, as a host part
+(nas=.10) or a full address (nas=10.99.0.10).`,
 		Example: `  wglink connect pve1 pve2
   wglink connect pve1 nas ct101 --name lab
+  wglink connect vps laptop phone --name road --hub vps
   wglink connect nas pve1 --name backup --subnet 172.30.5.0/24 --ip nas=.10`,
 		GroupID: "inventory",
 		Args:    cobra.MinimumNArgs(2),
@@ -360,6 +374,10 @@ func (a *app) newNetListCmd() *cobra.Command {
 				}
 				var names []string
 				for _, m := range n.Members {
+					if m.Name == n.Hub {
+						names = append(names, m.Name+" (hub)")
+						continue
+					}
 					names = append(names, m.Name)
 				}
 				rows = append(rows, []string{name, n.IfaceName(), subnet, port, orDash(strings.Join(names, ","))})
@@ -428,6 +446,11 @@ func (a *app) newNetShowCmd() *cobra.Command {
 			}
 			if n.Keepalive != 0 {
 				fmt.Fprintf(out, "%-10s %ds\n", "keepalive", n.Keepalive)
+			}
+			if n.Hub != "" {
+				fmt.Fprintf(out, "%-10s %s (the others connect through it)\n", "hub", n.Hub)
+			} else {
+				fmt.Fprintf(out, "%-10s %s\n", "topology", "full mesh")
 			}
 			fmt.Fprintln(out)
 			var rows [][]string

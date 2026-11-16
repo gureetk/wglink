@@ -118,7 +118,7 @@ func (s *Session) Status(ctx context.Context, opts StatusOptions) (*Report, erro
 				continue
 			}
 			for _, peer := range n.Members {
-				if r := s.recorded(n.Name, peer.Name); peer.Name != m.Name && r != nil && r.IP.IsValid() {
+				if r := s.recorded(n.Name, peer.Name); n.Linked(m.Name, peer.Name) && r != nil && r.IP.IsValid() {
 					pings[m.Name] = append(pings[m.Name], node.PingTarget{Iface: iface, Addr: r.IP})
 				}
 			}
@@ -180,7 +180,9 @@ func (s *Session) netReport(n *config.Network, got map[string]*node.Status, errs
 	}
 	for i, a := range n.Members {
 		for _, b := range n.Members[i+1:] {
-			nr.Links = append(nr.Links, link(nr.Iface, views[a.Name], views[b.Name]))
+			if n.Linked(a.Name, b.Name) {
+				nr.Links = append(nr.Links, link(nr.Iface, views[a.Name], views[b.Name]))
+			}
 		}
 	}
 	return nr
