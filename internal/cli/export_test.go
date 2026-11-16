@@ -69,3 +69,31 @@ func TestExport(t *testing.T) {
 	wg(t, dir, "node", "add", "tab", "--manual")
 	wgErr(t, dir, "tab isn't in lab", "export", "lab", "tab")
 }
+
+func TestExportPresharedKeys(t *testing.T) {
+	dir, fakes := fakeLab(t)
+	wg(t, dir, "connect", "pve1", "nas", "--name", "lab", "--psk")
+	wg(t, dir, "apply", "--yes")
+	wg(t, dir, "node", "add", "phone", "--manual")
+	wg(t, dir, "net", "join", "lab", "phone")
+
+	conf := wg(t, dir, "export", "lab", "phone")
+	keys := regexp.MustCompile(`(?m)^PresharedKey = (\S+)$`).FindAllStringSubmatch(conf, -1)
+	if len(keys) != 2 || strings.Contains(conf, "@") {
+		t.Fatalf("config:\n%s", conf)
+	}
+	// Peers are in name order: nas, then pve1.
+	for i, peer := range []string{"nas", "pve1"} {
+		stored, _ := os.ReadFile(filepath.Join(fakes[peer].Dir, "wg-lab.psk.phone"))
+		if !wgconf.ValidKey(keys[i][1]) || strings.TrimSpace(string(stored)) != keys[i][1] {
+			t.Errorf("%s stored %q, the config has %q", peer, stored, keys[i][1])
+		}
+	}
+	if plan := wg(t, dir, "plan"); !strings.Contains(plan, "add peer phone (live)") {
+		t.Errorf("plan after export:\n%s", plan)
+	}
+	wg(t, dir, "apply", "--yes")
+	if plan := wg(t, dir, "plan"); !strings.Contains(plan, "Everything is up to date.") {
+		t.Errorf("plan after apply:\n%s", plan)
+	}
+}

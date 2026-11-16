@@ -128,6 +128,32 @@ func (n Node) key(ctx context.Context, iface string, rotate bool) (pub string, c
 	return pub, created, nil
 }
 
+// SetPSKs stores preshared keys for iface, by peer name, replacing any the
+// node has for those peers. Configs load them when next written.
+func (n Node) SetPSKs(ctx context.Context, iface string, psks map[string]string) error {
+	if err := checkIfaces([]string{iface}); err != nil {
+		return err
+	}
+	words := make([]string, 0, len(psks))
+	for peer, key := range psks {
+		if !nameRE.MatchString(peer) || !wgconf.ValidKey(key) {
+			return fmt.Errorf("invalid preshared key for %q", peer)
+		}
+		words = append(words, peer+"="+key)
+	}
+	sort.Strings(words)
+	out, err := n.run(ctx, "psk", map[string]string{"WG_IFACE": iface, "WG_PSKS": strings.Join(words, " ")})
+	if err != nil {
+		return err
+	}
+	for _, d := range parse(out) {
+		if d.key == "stored" {
+			return nil
+		}
+	}
+	return fmt.Errorf("%s: storing preshared keys for %s didn't finish", n.Runner, iface)
+}
+
 // Write is a config to install.
 type Write struct {
 	Iface  string

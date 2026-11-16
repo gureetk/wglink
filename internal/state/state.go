@@ -39,6 +39,9 @@ type Member struct {
 	PubKey string     `json:"pubkey,omitempty"`
 	// Applied is the hash of the config last written, with secrets removed.
 	Applied string `json:"applied,omitempty"`
+	// PSKs, for a manual node, are hashes of the preshared keys it was
+	// given by its last export, by peer.
+	PSKs map[string]string `json:"psks,omitempty"`
 }
 
 // New returns an empty state.

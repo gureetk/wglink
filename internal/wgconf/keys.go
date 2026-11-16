@@ -4,7 +4,9 @@ import (
 	"bytes"
 	"crypto/ecdh"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 )
 
 // ValidKey reports whether s is a base64 WireGuard key.
@@ -25,6 +27,22 @@ func GenerateKey() (private, public string, err error) {
 	private = base64.StdEncoding.EncodeToString(b[:])
 	public, err = PublicKey(private)
 	return private, public, err
+}
+
+// GeneratePSK makes a preshared key the way wg genpsk does.
+func GeneratePSK() (string, error) {
+	var b [32]byte
+	if _, err := rand.Read(b[:]); err != nil {
+		return "", err
+	}
+	return base64.StdEncoding.EncodeToString(b[:]), nil
+}
+
+// PSKHash identifies a preshared key without revealing it, as nodes do when
+// they report the keys they have.
+func PSKHash(key string) string {
+	sum := sha256.Sum256([]byte(key + "\n"))
+	return hex.EncodeToString(sum[:])
 }
 
 // PublicKey derives the public key for a base64 private key.
@@ -52,4 +70,17 @@ func WithPrivateKey(text []byte, key string) []byte {
 	b.WriteString("[Interface]\nPrivateKey = " + key + "\n")
 	b.Write(rest)
 	return b.Bytes()
+}
+
+// WithPresharedKeys fills in "PresharedKey = @peer" placeholders, as nodes
+// do when they write a config.
+func WithPresharedKeys(text []byte, psks map[string]string) []byte {
+	lines := bytes.SplitAfter(text, []byte("\n"))
+	for i, l := range lines {
+		peer, ok := bytes.CutPrefix(bytes.TrimRight(l, "\n"), []byte("PresharedKey = @"))
+		if key, found := psks[string(peer)]; ok && found {
+			lines[i] = []byte("PresharedKey = " + key + "\n")
+		}
+	}
+	return bytes.Join(lines, nil)
 }

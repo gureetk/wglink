@@ -120,7 +120,10 @@ type Network struct {
 	Keepalive int    `yaml:"keepalive"`
 	// Hub is the member every other member connects through. Empty means a
 	// full mesh, where every member connects to every other.
-	Hub     string  `yaml:"hub"`
+	Hub string `yaml:"hub"`
+	// PSK gives each pair of peers a preshared key, a second secret on top
+	// of their key pairs.
+	PSK     bool    `yaml:"psk"`
 	Members Members `yaml:"members"`
 }
 
@@ -385,7 +388,7 @@ var fields = map[string][]string{
 	"node":      {"ssh", "local", "exec", "pct", "qm", "manual", "sudo", "endpoint", "keepalive", "service"},
 	"guestref":  {"via", "vmid"},
 	"manual":    {"pubkey"},
-	"network":   {"subnet", "port", "iface", "mtu", "keepalive", "hub", "members"},
+	"network":   {"subnet", "port", "iface", "mtu", "keepalive", "hub", "psk", "members"},
 	"member":    {"ip", "routes"},
 }
 

@@ -44,11 +44,21 @@ Notable changes to wglink. The format follows
   - The probe now compares the key file with the keys in the config and in
     the running interface. `plan` loads a new key that hasn't been picked up,
     for example after an interrupted rotation.
+- Preshared keys, with `--psk` on `connect`, `net create` and `net set`:
+  - `apply` makes a key for each pair of peers and stores it on both before
+    either config uses it.
+  - Nodes report keys by their hashes, so `plan` finds pairs that don't
+    match and keys that aren't loaded yet.
+  - `rotate` replaces a member's preshared keys too, and `export` gives a
+    phone new ones.
 
 ### Fixed
 
 - A config edited by hand without a final newline no longer breaks `plan`
   and `status` for its node.
+- Turning a network's keepalive off now takes effect on a live update, not
+  only after the interface restarts. `wg syncconf` keeps settings a config
+  leaves out, so wglink sets them to zero.
 
 ## [0.1.0] - 2026-11-16
 

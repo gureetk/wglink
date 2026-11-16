@@ -2,8 +2,10 @@ package cli
 
 import (
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -24,6 +26,9 @@ such as a phone. The first export makes the device's key pair. The private
 key goes into the printed config and is kept nowhere else; the public key is
 saved in wglink.yaml. Later exports leave a placeholder for the private key,
 unless --new-key replaces the pair.
+
+In a network with preshared keys, every export makes new ones: the peers
+wglink can reach store theirs, and the config carries the device's.
 
 Then run "wglink apply" so the other members add the device as a peer.
 "wglink plan" says when a device's config has changed and needs exporting
@@ -96,7 +101,7 @@ again.`,
 			if key == "" {
 				key = fmt.Sprintf("(the private key from %s's first export)", name)
 			}
-			text := wgconf.WithPrivateKey(ex.Config, key)
+			text := wgconf.WithPresharedKeys(wgconf.WithPrivateKey(ex.Config, key), ex.PSKs)
 			if file == nil {
 				if _, err := cmd.OutOrStdout().Write(text); err != nil {
 					return err
@@ -114,8 +119,15 @@ again.`,
 			if len(ex.Missing) > 0 {
 				fmt.Fprintf(errOut, "Left out %s, which %s no key yet; run \"wglink apply\", then export again.\n", strings.Join(ex.Missing, ", "), plural(len(ex.Missing), "has", "have"))
 			}
-			if !ex.Plan.Empty() || private != "" {
-				fmt.Fprintf(errOut, "Run \"wglink apply\" so the other members of %s accept %s's key.\n", network, name)
+			if len(ex.NoPSK) > 0 {
+				fmt.Fprintf(errOut, "Couldn't reach %s to give %s a preshared key, so the config has none for %s; export again once %s.\n",
+					strings.Join(ex.NoPSK, ", "), plural(len(ex.NoPSK), "it", "them"), plural(len(ex.NoPSK), "it", "them"), plural(len(ex.NoPSK), "it's reachable", "they're reachable"))
+			}
+			if len(ex.PSKs) > 0 {
+				fmt.Fprintf(errOut, "Stored new preshared keys for %s on %s.\n", name, strings.Join(slices.Sorted(maps.Keys(ex.PSKs)), ", "))
+			}
+			if !ex.Plan.Empty() || private != "" || len(ex.PSKs) > 0 {
+				fmt.Fprintf(errOut, "Run \"wglink apply\" so the other members of %s update their side.\n", network)
 			}
 			return nil
 		},

@@ -61,6 +61,35 @@ probe_iface() {
 		out "@up"
 		if have wg && pub=$(wg show "$1" public-key 2>/dev/null); then out "@livepub $pub"; fi
 	fi
+	# Preshared keys, by hash: in their files, and as the config has them.
+	if have sha256sum; then
+		psk_peers "$1" | while read -r peer; do
+			out "@pskfile $peer $(key_hash "$(cat "$WG_DIR/$1.psk.$peer")")"
+		done
+		if [ -f "$conf" ]; then
+			conf_psks "$conf" | while read -r peer psk; do
+				out "@pskconf $peer $(key_hash "$psk")"
+			done
+		fi
+	fi
+}
+
+# key_hash prints a key's SHA-256, which reveals nothing about the key.
+key_hash() { printf '%s\n' "$1" | sha256sum | cut -d ' ' -f 1; }
+
+# conf_psks prints "peer key" for each preshared key in a config, naming
+# peers by the comment wglink writes under [Peer]. The keys stay on this node.
+conf_psks() {
+	awk '
+		/^\[Peer\]/ { name = ""; next }
+		/^#/ && name == "" { name = $2; next }
+		tolower($0) ~ /^[ \t]*presharedkey[ \t]*=/ {
+			v = $0
+			sub(/^[^=]*=[ \t]*/, "", v)
+			sub(/[ \t\r]+$/, "", v)
+			if (name != "") print name, v
+		}
+	' "$1"
 }
 
 # conf_key prints the private key in a config, which stays on this node.

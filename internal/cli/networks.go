@@ -33,6 +33,7 @@ func (a *app) newNetCmd() *cobra.Command {
 // netFlags are the settings a network can be created or changed with.
 type netFlags struct {
 	subnet, port, mtu, keepalive, iface, hub string
+	psk                                      bool
 }
 
 func (f *netFlags) add(cmd *cobra.Command, set bool) {
@@ -50,6 +51,11 @@ func (f *netFlags) add(cmd *cobra.Command, set bool) {
 		none = `, or "none"`
 	}
 	fl.StringVar(&f.hub, "hub", "", "member the others connect through, instead of all to all"+none)
+	off := ""
+	if set {
+		off = " (--psk=false to stop)"
+	}
+	fl.BoolVar(&f.psk, "psk", false, "give each pair of peers a preshared key as well"+off)
 	if set {
 		fl.StringVar(&f.iface, "iface", "", `interface name, or "auto" for wg-<network>`)
 	}
@@ -113,6 +119,13 @@ func (f *netFlags) fields(cmd *cobra.Command) ([]config.Field, error) {
 			out = append(out, config.Field{Key: "hub"})
 		} else {
 			out = append(out, config.Field{Key: "hub", Value: f.hub})
+		}
+	}
+	if cmd.Flags().Changed("psk") {
+		if f.psk {
+			out = append(out, config.Field{Key: "psk", Value: true})
+		} else {
+			out = append(out, config.Field{Key: "psk"})
 		}
 	}
 	return out, nil
@@ -451,6 +464,9 @@ func (a *app) newNetShowCmd() *cobra.Command {
 				fmt.Fprintf(out, "%-10s %s (the others connect through it)\n", "hub", n.Hub)
 			} else {
 				fmt.Fprintf(out, "%-10s %s\n", "topology", "full mesh")
+			}
+			if n.PSK {
+				fmt.Fprintf(out, "%-10s %s\n", "psk", "on (each pair of peers shares one)")
 			}
 			fmt.Fprintln(out)
 			var rows [][]string

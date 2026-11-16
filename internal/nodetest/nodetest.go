@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"testing"
@@ -219,8 +220,8 @@ func (f *Fake) Exec() []string {
 	return []string{path}
 }
 
-// Runner runs scripts on the fake and fails the test if a private key ever
-// appears in their output.
+// Runner runs scripts on the fake and fails the test if a private or
+// preshared key ever appears in their output.
 func (f *Fake) Runner() runner.Runner { return fakeRunner{f} }
 
 // Fail makes every command on the fake fail, like an unreachable host.
@@ -298,8 +299,35 @@ func (r fakeRunner) Run(ctx context.Context, argv []string, stdin []byte) ([]byt
 	if bytes.Contains(stdout.Bytes(), []byte("priv0")) || bytes.Contains(stderr.Bytes(), []byte("priv0")) {
 		f.t.Errorf("a private key leaked into script output:\n%s\n%s", stdout.String(), stderr.String())
 	}
+	for _, key := range f.psks(stdin) {
+		if bytes.Contains(stdout.Bytes(), key) || bytes.Contains(stderr.Bytes(), key) {
+			f.t.Errorf("a preshared key leaked into script output:\n%s\n%s", stdout.String(), stderr.String())
+		}
+	}
 	if err != nil {
 		return stdout.Bytes(), &runner.ExitError{Target: "fake", Code: cmd.ProcessState.ExitCode(), Stderr: stderr.String()}
 	}
 	return stdout.Bytes(), nil
+}
+
+var pskVar = regexp.MustCompile(`(?m)^WG_PSKS='([^']*)'$`)
+
+// psks are the preshared keys a script was given and the ones the fake has
+// stored.
+func (f *Fake) psks(script []byte) [][]byte {
+	var out [][]byte
+	if m := pskVar.FindSubmatch(script); m != nil {
+		for _, w := range bytes.Fields(m[1]) {
+			if _, key, ok := bytes.Cut(w, []byte("=")); ok {
+				out = append(out, key)
+			}
+		}
+	}
+	files, _ := filepath.Glob(filepath.Join(f.Dir, "*.psk.*"))
+	for _, file := range files {
+		if b, err := os.ReadFile(file); err == nil && len(bytes.TrimSpace(b)) > 0 {
+			out = append(out, bytes.TrimSpace(b))
+		}
+	}
+	return out
 }

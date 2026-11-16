@@ -40,3 +40,12 @@ use_systemd() {
 }
 
 is_up() { ip link show dev "$1" >/dev/null 2>&1; }
+
+# psk_peers IFACE prints the peers that have a preshared key file for IFACE.
+psk_peers() {
+	for f in "$WG_DIR/$1".psk.*; do
+		peer=${f#"$WG_DIR/$1.psk."}
+		case $peer in '' | *[!a-z0-9-]*) continue ;; esac
+		if [ -f "$f" ]; then out "$peer"; fi
+	done
+}

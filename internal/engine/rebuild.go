@@ -93,9 +93,10 @@ func (s *Session) Rebuild(ctx context.Context, networks []string) ([]*Rebuilt, e
 	if err != nil {
 		return nil, err
 	}
-	// Record each manual node's config as given, so plan doesn't ask for exports.
+	// Record each manual node's config as given, with the preshared keys its
+	// peers have, so plan doesn't ask for exports.
 	for _, nm := range manual {
-		if _, err := s.Export(ctx, nm[0], nm[1]); err != nil {
+		if _, err := s.export(ctx, nm[0], nm[1], false); err != nil {
 			return out, fmt.Errorf("%s: %w", nm[1], err)
 		}
 	}

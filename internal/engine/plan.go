@@ -49,6 +49,7 @@ type Plan struct {
 	facts    map[string]*node.Facts
 	assigned map[string]*ipam.Assigned
 	keys     map[string]map[string]string // network -> node -> public key
+	psks     map[string]map[pair]pskState // network -> preshared keys
 }
 
 // NetPlan is one network's plan.
@@ -131,7 +132,7 @@ func (p *Plan) warn(format string, args ...any) {
 
 // Plan probes the nodes involved and works out what apply would change.
 func (s *Session) Plan(ctx context.Context, opts Options) (*Plan, error) {
-	p := &Plan{opts: opts, facts: map[string]*node.Facts{}, keys: map[string]map[string]string{}}
+	p := &Plan{opts: opts, facts: map[string]*node.Facts{}, keys: map[string]map[string]string{}, psks: map[string]map[pair]pskState{}}
 	scoped, err := s.scope(opts.Networks)
 	if err != nil {
 		return nil, err
@@ -306,8 +307,9 @@ func (s *Session) manual(name string) bool {
 
 func (p *Plan) rotating(name string) bool { return slices.Contains(p.opts.Rotate, name) }
 
-// willKey reports whether this run can create a key on the node.
-func (p *Plan) willKey(name string) bool { return p.facts[name] != nil && p.inNodeScope(name) }
+// applies reports whether apply runs on the node this time: it was reached
+// and is selected.
+func (p *Plan) applies(name string) bool { return p.facts[name] != nil && p.inNodeScope(name) }
 
 func (p *Plan) inNodeScope(name string) bool {
 	return len(p.opts.Nodes) == 0 || slices.Contains(p.opts.Nodes, name)
@@ -437,7 +439,7 @@ func (s *Session) planNetwork(ctx context.Context, p *Plan, n *config.Network) *
 	}
 	for _, m := range n.Members {
 		switch {
-		case p.keys[n.Name][m.Name] != "" || p.willKey(m.Name):
+		case p.keys[n.Name][m.Name] != "" || p.applies(m.Name):
 		case s.manual(m.Name):
 			p.warn("network %s: %s has no key yet, so its peers leave it out; run \"wglink export %s %s\" to make one", n.Name, m.Name, n.Name, m.Name)
 		default:
@@ -446,6 +448,7 @@ func (s *Session) planNetwork(ctx context.Context, p *Plan, n *config.Network) *
 	}
 	s.warnUnreachablePairs(ctx, p, n)
 	s.checkRoutes(p, n)
+	s.planPSKs(p, n, sn)
 
 	for _, m := range n.Members {
 		mp := &MemberPlan{Node: m.Name, Addr: a.Addrs[m.Name]}
@@ -482,19 +485,22 @@ func (s *Session) planNetwork(ctx context.Context, p *Plan, n *config.Network) *
 		case node.ConfManaged:
 			s.compare(mp, iface, want, sn)
 		}
+		var why []string
 		switch {
 		case mp.Rotate:
-			mp.Reasons = append(mp.Reasons, "rotate its key")
+			why = append(why, "rotate its key")
 		case mp.NewKey:
-			mp.Reasons = append(mp.Reasons, "new key")
+			why = append(why, "new key")
 		case iface.StaleKey():
 			// Its key file changed, but the config or the interface still has the old key.
-			mp.Reasons = append(mp.Reasons, "load its new key")
-		default:
-			continue
+			why = append(why, "load its new key")
 		}
-		if mp.Action == Keep {
-			mp.Action = Live
+		why = append(why, s.pskReasons(p, n, m.Name, iface)...)
+		if len(why) > 0 {
+			mp.Reasons = append(mp.Reasons, why...)
+			if mp.Action == Keep {
+				mp.Action = Live
+			}
 		}
 	}
 	return np
@@ -516,6 +522,9 @@ func (s *Session) planManual(ctx context.Context, p *Plan, n *config.Network, mp
 		mp.Action, mp.Reasons = Export, []string{"its config changed: " + hint}
 	default:
 		mp.Action = Keep
+		if changed := s.changedPSKs(p, n, mp.Node, sm); len(changed) > 0 {
+			mp.Action, mp.Reasons = Export, []string{fmt.Sprintf("preshared %s changed on %s: %s", plural(len(changed), "key", "keys"), strings.Join(changed, ", "), hint)}
+		}
 	}
 }
 
@@ -576,7 +585,7 @@ func (s *Session) desired(ctx context.Context, p *Plan, n *config.Network, membe
 		}
 		key := p.keys[n.Name][peer.Name]
 		if key == "" {
-			if !p.willKey(peer.Name) {
+			if !p.applies(peer.Name) {
 				continue // no key yet and none coming in this run
 			}
 			key = "(new key for " + peer.Name + ")"
@@ -596,11 +605,12 @@ func (s *Session) desired(ctx context.Context, p *Plan, n *config.Network, membe
 			}
 		}
 		i.Peers = append(i.Peers, wgconf.Peer{
-			Name:       peer.Name,
-			PublicKey:  key,
-			AllowedIPs: allowed,
-			Endpoint:   endpoint,
-			Keepalive:  keepalive,
+			Name:         peer.Name,
+			PublicKey:    key,
+			PresharedKey: s.pskOn(p, n, member, peer.Name),
+			AllowedIPs:   allowed,
+			Endpoint:     endpoint,
+			Keepalive:    keepalive,
 		})
 	}
 	return i

@@ -2,13 +2,14 @@
 # Writes WG_CONFIG with this node's secrets filled in, keeps the old file as
 # .prev, then loads it: live with wg syncconf, or by (re)starting. With
 # WG_REVERT seconds, a timer undoes the change unless confirm.sh runs first.
+# Preshared key files the new config doesn't use are deleted.
 
 main() {
 	exec </dev/null
 	conf="$WG_DIR/$WG_IFACE.conf"
 	key="$WG_DIR/$WG_IFACE.key"
 	strip="$WG_DIR/.$WG_IFACE.strip"
-	trap 'rm -f "$conf.new" "$strip"' EXIT
+	trap 'rm -f "$conf.new" "$strip" "$strip.raw"' EXIT
 	have wg-quick || die "wg-quick is not installed; install wireguard-tools"
 	[ -s "$key" ] || die "no private key at $key"
 	if [ -f "$conf" ] && ! is_managed "$conf" && [ "$WG_ADOPT" != 1 ]; then
@@ -19,6 +20,12 @@ main() {
 	if [ -f "$conf" ]; then cp -p "$conf" "$conf.prev"; fi
 	mv -f "$conf.new" "$conf"
 	load
+	# The config holds the preshared keys it uses; drop files for any others.
+	psk_peers "$WG_IFACE" | while read -r peer; do
+		if ! printf '%s\n' "$WG_CONFIG" | grep -qxF "PresharedKey = @$peer"; then
+			rm -f "$WG_DIR/$WG_IFACE.psk.$peer"
+		fi
+	done
 	out "@section config"
 	public "$conf" | raw
 }
@@ -48,7 +55,8 @@ load() {
 	if use_systemd; then systemctl enable --quiet "$unit"; fi
 	if is_up "$WG_IFACE"; then
 		if [ "$WG_MODE" = live ]; then
-			wg-quick strip "$WG_IFACE" >"$strip"
+			wg-quick strip "$WG_IFACE" >"$strip.raw"
+			zero_unset "$strip.raw" >"$strip"
 			wg syncconf "$WG_IFACE" "$strip"
 			out "@loaded live"
 			return 0
@@ -66,6 +74,23 @@ load() {
 		wg-quick up "$WG_IFACE"
 	fi
 	out "@loaded start"
+}
+
+# zero_unset FILE prints a stripped config with a zero preshared key and
+# keepalive for each peer that has none: wg syncconf leaves out settings a
+# config omits, so turning them off would otherwise wait for a restart.
+zero_unset() {
+	awk '
+		function flush() {
+			if (peer && !psk) print "PresharedKey = AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+			if (peer && !ka) print "PersistentKeepalive = 0"
+		}
+		/^[ \t]*\[/ { flush(); peer = tolower($0) ~ /\[peer\]/; psk = ka = 0 }
+		tolower($0) ~ /^[ \t]*presharedkey[ \t]*=/ { psk = 1 }
+		tolower($0) ~ /^[ \t]*persistentkeepalive[ \t]*=/ { ka = 1 }
+		{ print }
+		END { flush() }
+	' "$1"
 }
 
 # arm_revert sets a systemd timer that puts the current config back, or

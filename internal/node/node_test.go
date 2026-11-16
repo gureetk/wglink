@@ -198,8 +198,10 @@ func testWriteModes(t *testing.T, shell []string) {
 	if !strings.Contains(e.Log(), "wg syncconf wg-lab") || strings.Contains(e.Log(), "systemctl restart") {
 		t.Errorf("live change should use syncconf only:\n%s", e.Log())
 	}
-	if b, _ := os.ReadFile(filepath.Join(e.Stub, "synced.wg-lab")); strings.Contains(string(b), "Address") {
-		t.Errorf("syncconf got an unstripped config:\n%s", b)
+	// Settings the config leaves out are zeroed, or syncconf would keep them.
+	b, _ := os.ReadFile(filepath.Join(e.Stub, "synced.wg-lab"))
+	if strings.Contains(string(b), "Address") || !strings.HasSuffix(string(b), "PresharedKey = AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=\nPersistentKeepalive = 0\n") {
+		t.Errorf("syncconf got:\n%s", b)
 	}
 
 	if _, err := e.n.Write(ctx, Write{Iface: "wg-lab", Config: rendered(false), Mode: wgconf.Restart}); err != nil {
@@ -236,12 +238,41 @@ func testPSK(t *testing.T, shell []string) {
 	if _, err := e.n.Write(ctx, Write{Iface: "wg-lab", Config: rendered(true)}); err == nil || !strings.Contains(err.Error(), "no preshared key for nas") {
 		t.Fatalf("missing psk: %v", err)
 	}
-	psk := "pskpskpskpskpskpskpskpskpskpskpskpskpskpsk="
-	os.WriteFile(filepath.Join(e.Dir, "wg-lab.psk.nas"), []byte(psk+"\n"), 0o600)
+	psk := "pskpskpskpskpskpskpskpskpskpskpskpskpskpsk0="
+	other, _ := wgconf.GeneratePSK()
+	if err := e.n.SetPSKs(ctx, "wg-lab", map[string]string{"nas": psk, "pi": other}); err != nil {
+		t.Fatal(err)
+	}
+	for _, peer := range []string{"nas", "pi"} {
+		if fi, err := os.Stat(filepath.Join(e.Dir, "wg-lab.psk."+peer)); err != nil || fi.Mode().Perm() != 0o600 {
+			t.Errorf("%s's key file: %v %v", peer, fi, err)
+		}
+	}
 	pub, err := e.n.Write(ctx, Write{Iface: "wg-lab", Config: rendered(true)})
 	if err != nil {
 		t.Fatal(err)
 	}
+	if _, err := os.Stat(filepath.Join(e.Dir, "wg-lab.psk.pi")); !os.IsNotExist(err) {
+		t.Errorf("a key the config doesn't use was kept: %v", err)
+	}
+	f, err := e.n.Probe(ctx, []string{"wg-lab"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if i := f.Ifaces["wg-lab"]; len(i.PSKFile) != 1 || i.PSKFile["nas"] != wgconf.PSKHash(psk) || i.PSKConf["nas"] != wgconf.PSKHash(psk) {
+		t.Errorf("probe: files %v, config %v", i.PSKFile, i.PSKConf)
+	}
+	// Stored, not yet loaded.
+	e.n.SetPSKs(ctx, "wg-lab", map[string]string{"nas": other})
+	if f, _ := e.n.Probe(ctx, []string{"wg-lab"}); f.Ifaces["wg-lab"].PSKFile["nas"] != wgconf.PSKHash(other) || f.Ifaces["wg-lab"].PSKConf["nas"] != wgconf.PSKHash(psk) {
+		t.Errorf("probe after storing a new key: %+v", f.Ifaces["wg-lab"])
+	}
+	for _, bad := range []map[string]string{{"../x": psk}, {"nas": "short"}, {"nas": "x' y"}} {
+		if err := e.n.SetPSKs(ctx, "wg-lab", bad); err == nil {
+			t.Errorf("SetPSKs accepted %v", bad)
+		}
+	}
+	e.n.SetPSKs(ctx, "wg-lab", map[string]string{"nas": psk})
 	conf, _ := os.ReadFile(filepath.Join(e.Dir, "wg-lab.conf"))
 	if !strings.Contains(string(conf), "PresharedKey = "+psk+"\n") {
 		t.Errorf("psk not filled in:\n%s", conf)
