@@ -244,3 +244,24 @@ func TestHubFlags(t *testing.T) {
 		t.Errorf("net show:\n%s", out)
 	}
 }
+
+func TestRoutesCommand(t *testing.T) {
+	dir := newInventory(t)
+	wg(t, dir, "connect", "pve1", "nas", "--name", "lab")
+	if out := wg(t, dir, "routes", "lab", "nas", "192.168.50.0/24", "192.168.60.0/24"); !strings.Contains(out, "nas routes 192.168.50.0/24, 192.168.60.0/24 in lab.") {
+		t.Errorf("output: %s", out)
+	}
+	if m, _ := load(t, dir).Networks["lab"].Member("nas"); len(m.Routes) != 2 {
+		t.Errorf("nas = %+v", m)
+	}
+	if out := wg(t, dir, "net", "show", "lab"); !strings.Contains(out, "192.168.50.0/24,192.168.60.0/24") {
+		t.Errorf("net show:\n%s", out)
+	}
+	wgErr(t, dir, "write 192.168.50.1/24 as 192.168.50.0/24", "routes", "lab", "nas", "192.168.50.1/24")
+	wgErr(t, dir, "isn't a subnet", "routes", "lab", "nas", "lan")
+	wgErr(t, dir, "ct101 isn't in lab", "routes", "lab", "ct101", "10.1.0.0/16")
+	wg(t, dir, "routes", "lab", "nas")
+	if m, _ := load(t, dir).Networks["lab"].Member("nas"); len(m.Routes) != 0 {
+		t.Errorf("routes not cleared: %+v", m)
+	}
+}

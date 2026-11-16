@@ -186,6 +186,61 @@ func (d *Doc) SetMember(network, node string, addr AddrSpec) error {
 	return nil
 }
 
+// SetMemberRoutes sets the subnets a member routes for the others; none
+// clears them. The member's entry grows into {ip, routes} or shrinks back.
+func (d *Doc) SetMemberRoutes(network, node string, routes []netip.Prefix) error {
+	n, err := d.network(network)
+	if err != nil {
+		return err
+	}
+	members := lookup(n, "members")
+	if members == nil || members.Kind == yaml.SequenceNode {
+		if len(routes) == 0 {
+			return nil
+		}
+		members = seqToMap(members)
+		setKey(n, "members", members)
+	}
+	if members.Kind != yaml.MappingNode {
+		return fmt.Errorf("network %s: members must be a list or a map", network)
+	}
+	v := lookup(members, node)
+	if v == nil {
+		return fmt.Errorf("%s isn't in network %s", node, network)
+	}
+	if len(routes) == 0 {
+		if v.Kind == yaml.MappingNode {
+			deleteKey(v, "routes")
+			ip := lookup(v, "ip")
+			switch {
+			case len(v.Content) == 0:
+				setKey(members, node, scalar("auto"))
+			case len(v.Content) == 2 && ip != nil:
+				setKey(members, node, ip)
+			}
+		}
+		if allAuto(members) {
+			setKey(n, "members", mapToSeq(members))
+		}
+		return nil
+	}
+	if v.Kind != yaml.MappingNode {
+		m := mapping()
+		m.Style = yaml.FlowStyle
+		if !isNull(v) && v.Value != "auto" {
+			setKey(m, "ip", v)
+		}
+		setKey(members, node, m)
+		v = m
+	}
+	list := flowSeq()
+	for _, r := range routes {
+		list.Content = append(list.Content, scalar(r.String()))
+	}
+	setKey(v, "routes", list)
+	return nil
+}
+
 // addrNode quotes host parts, since a bare .10 would read as a number.
 func addrNode(a AddrSpec) *yaml.Node {
 	n := scalar(a.String())

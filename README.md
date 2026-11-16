@@ -225,6 +225,25 @@ Spokes send the whole network's traffic to the hub. The hub turns on
 forwarding for its WireGuard interface alone when that comes up, through a
 `PostUp` line in its config, so nothing else on the machine changes.
 
+## Routed subnets
+
+A member can carry traffic for a subnet behind it, such as its LAN, so the
+other members can reach machines that don't run WireGuard:
+
+```sh
+wglink routes lab nas 192.168.50.0/24
+```
+
+The other members then send 192.168.50.0/24 through `nas`. For that to work:
+- `nas` needs IP forwarding on. `plan` warns if it's off.
+- Hosts on that LAN need a route back to the network through `nas`, for
+  example on the router.
+- No other member can be on that subnet itself, since it couldn't also route
+  it through `nas`. `plan` stops you if one is.
+
+In `wglink.yaml` the routes live on the member:
+`nas: {routes: [192.168.50.0/24]}`.
+
 ## The inventory
 
 The commands above edit `wglink.yaml` for you, keeping its comments and
@@ -412,7 +431,6 @@ It removes the old release and tag only after the new build passes.
 
 - **0.3:**
   - A terminal UI.
-  - Routed subnets behind members.
   - Key rotation.
   - Preshared keys.
   - IPv6.

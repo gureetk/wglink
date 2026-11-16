@@ -323,6 +323,12 @@ func (s *Session) ipamRequest(facts map[string]*node.Facts) ipam.Request {
 		net := ipam.Net{Name: name, Subnet: n.Subnet.Prefix, Port: uint16(n.Port)}
 		for _, m := range n.Members {
 			net.Members = append(net.Members, ipam.Member{Node: m.Name, Addr: m.Addr})
+			// Subnets routed through a member are taken on every member.
+			for _, r := range m.Routes {
+				for _, other := range n.Members {
+					req.Used[other.Name] = append(req.Used[other.Name], ipam.Use{Prefix: r, What: fmt.Sprintf("subnet routed through %s in %s", m.Name, name)})
+				}
+			}
 		}
 		if sn, ok := s.State.Networks[name]; ok {
 			net.Prev = ipam.Assigned{Subnet: sn.Subnet, Port: sn.Port, Addrs: sn.Addrs()}
@@ -330,7 +336,8 @@ func (s *Session) ipamRequest(facts map[string]*node.Facts) ipam.Request {
 		req.Networks = append(req.Networks, net)
 	}
 	for name, f := range facts {
-		req.Used[name], req.Ports[name] = used(f, ours)
+		uses, ports := used(f, ours)
+		req.Used[name], req.Ports[name] = append(req.Used[name], uses...), ports
 	}
 	return req
 }
@@ -416,6 +423,7 @@ func (s *Session) planNetwork(ctx context.Context, p *Plan, n *config.Network) *
 		}
 	}
 	s.warnUnreachablePairs(ctx, p, n)
+	s.checkRoutes(p, n)
 
 	for _, m := range n.Members {
 		mp := &MemberPlan{Node: m.Name, Addr: a.Addrs[m.Name]}
@@ -546,9 +554,15 @@ func (s *Session) desired(ctx context.Context, p *Plan, n *config.Network, membe
 		if e, err := s.Endpoint(ctx, peer.Name); err == nil && !e.None {
 			endpoint = e.Dial(a.Port)
 		}
-		allowed := []netip.Prefix{netip.PrefixFrom(a.Addrs[peer.Name], 32)}
+		allowed := append([]netip.Prefix{netip.PrefixFrom(a.Addrs[peer.Name], 32)}, peer.Routes...)
 		if peer.Name == n.Hub {
-			allowed = []netip.Prefix{a.Subnet} // the rest of the network is behind the hub
+			// The rest of the network, and every subnet routed in it, is behind the hub.
+			allowed = []netip.Prefix{a.Subnet}
+			for _, m := range n.Members {
+				if m.Name != member {
+					allowed = append(allowed, m.Routes...)
+				}
+			}
 		}
 		i.Peers = append(i.Peers, wgconf.Peer{
 			Name:       peer.Name,
@@ -559,6 +573,47 @@ func (s *Session) desired(ctx context.Context, p *Plan, n *config.Network, membe
 		})
 	}
 	return i
+}
+
+// checkRoutes finds members that are already on a subnet another member
+// routes, where wg-quick couldn't add the route, and routing members that
+// won't forward.
+func (s *Session) checkRoutes(p *Plan, n *config.Network) {
+	ours := map[string]bool{}
+	for _, other := range s.Inv.Networks {
+		ours[other.IfaceName()] = true
+	}
+	for _, m := range n.Members {
+		if len(m.Routes) == 0 {
+			continue
+		}
+		if f := p.facts[m.Name]; f != nil && !f.Forward4 {
+			p.warn("%s routes %s for the others, but IP forwarding is off there; turn it on with \"sysctl -w net.ipv4.ip_forward=1\" and keep it in /etc/sysctl.d/", m.Name, joinPrefixes(m.Routes))
+		}
+		for _, other := range n.Members {
+			f := p.facts[other.Name]
+			if other.Name == m.Name || f == nil {
+				continue
+			}
+			uses, _ := used(f, ours)
+			for _, r := range m.Routes {
+				for _, u := range uses {
+					if u.Prefix.Overlaps(r) {
+						p.problem("network %s: %s is on %s itself (%s), so it can't also reach it through %s; leave %s out or drop the route", n.Name, other.Name, r, u.What, m.Name, other.Name)
+						break
+					}
+				}
+			}
+		}
+	}
+}
+
+func joinPrefixes(ps []netip.Prefix) string {
+	s := make([]string, len(ps))
+	for i, p := range ps {
+		s[i] = p.String()
+	}
+	return strings.Join(s, ", ")
 }
 
 func (s *Session) warnUnreachablePairs(ctx context.Context, p *Plan, n *config.Network) {

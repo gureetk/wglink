@@ -1,6 +1,7 @@
 package config
 
 import (
+	"net/netip"
 	"os"
 	"path/filepath"
 	"strings"
@@ -248,5 +249,43 @@ func TestSetNodeFieldsKeepsTheRest(t *testing.T) {
 	}
 	if err := d.SetNodeFields("ghost", Field{"sudo", true}); err == nil {
 		t.Error("changed a node that doesn't exist")
+	}
+}
+
+func TestSetMemberRoutes(t *testing.T) {
+	d, err := ParseDoc([]byte("version: 1\nnodes:\n  a: {ssh: a}\n  b: {ssh: b}\nnetworks:\n  lab:\n    members: [a, b]\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	lan := []netip.Prefix{netip.MustParsePrefix("192.168.50.0/24")}
+	if err := d.SetMemberRoutes("lab", "b", lan); err != nil {
+		t.Fatal(err)
+	}
+	if got := render(t, d); !strings.Contains(got, "      a: auto\n      b: {routes: [192.168.50.0/24]}\n") {
+		t.Errorf("with routes:\n%s", got)
+	}
+	inv, err := d.Inventory()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if m, _ := inv.Networks["lab"].Member("b"); len(m.Routes) != 1 || m.Routes[0] != lan[0] {
+		t.Errorf("b = %+v", m)
+	}
+	// A pinned address survives, and clearing collapses back to a list.
+	d.SetMember("lab", "b", mustAddr(t, ".10"))
+	if got := render(t, d); !strings.Contains(got, `b: {routes: [192.168.50.0/24], ip: ".10"}`) {
+		t.Errorf("with an address:\n%s", got)
+	}
+	d.SetMemberRoutes("lab", "b", nil)
+	if got := render(t, d); !strings.Contains(got, "      b: \".10\"\n") {
+		t.Errorf("routes cleared:\n%s", got)
+	}
+	d.SetMember("lab", "b", AddrSpec{})
+	d.SetMemberRoutes("lab", "b", nil)
+	if got := render(t, d); !strings.Contains(got, "members: [a, b]") {
+		t.Errorf("back to a list:\n%s", got)
+	}
+	if err := d.SetMemberRoutes("lab", "ghost", lan); err == nil {
+		t.Error("routes for a non-member")
 	}
 }
