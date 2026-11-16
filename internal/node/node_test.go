@@ -477,3 +477,30 @@ func TestTruncatedOutput(t *testing.T) {
 		t.Error("parseStatus accepted output without @end")
 	}
 }
+
+// A config edited by hand may lack its last newline; the directive after it
+// must still be found.
+func TestConfigWithoutFinalNewline(t *testing.T) {
+	for name, shell := range nodetest.Shells(t) {
+		t.Run(name, func(t *testing.T) {
+			nodetest.NeedStubbedIP(t, shell)
+			e := setup(t, shell, "none")
+			text := strings.TrimSuffix(string(rendered(false)), "\n")
+			os.WriteFile(filepath.Join(e.Dir, "wg-lab.conf"), []byte(text), 0o600)
+			f, err := e.n.Probe(ctx, []string{"wg-lab"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if c := f.Ifaces["wg-lab"]; c.Conf != ConfManaged || wgconf.Hash(c.Config) != wgconf.Hash(rendered(false)) {
+				t.Errorf("probe = %+v", c)
+			}
+			st, err := e.n.Status(ctx, []string{"wg-lab"}, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if wgconf.Hash(st.Ifaces["wg-lab"].Config) != wgconf.Hash(rendered(false)) {
+				t.Errorf("status config = %q", st.Ifaces["wg-lab"].Config)
+			}
+		})
+	}
+}

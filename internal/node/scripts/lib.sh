@@ -11,8 +11,10 @@ die() {
 
 have() { command -v "$1" >/dev/null 2>&1; }
 
-# raw marks lines of command output so they can't pass for directives.
-raw() { sed 's/^/|/'; }
+# raw marks lines of command output so they can't pass for directives. awk
+# also ends a last line that has no newline, which would swallow the next
+# directive.
+raw() { awk '{ print "|" $0 }'; }
 
 # is_managed FILE: the file starts with wglink's marker.
 is_managed() {
