@@ -25,6 +25,8 @@ Notable changes to wglink. The format follows
     systemd.
 - `wglink discover HOST` lists a Proxmox host's containers and VMs with their
   addresses. `--add` adds the running ones as nodes.
+- `wglink state rebuild` recovers a lost or stale `wglink.state.json` from
+  the configs on the nodes. It keeps the old file as `.bak`.
 
 ### Fixed
 

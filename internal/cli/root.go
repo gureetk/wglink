@@ -69,6 +69,7 @@ on the machines that use them, and nothing runs in the background.`,
 		a.newApplyCmd(),
 		a.newStatusCmd(),
 		a.newExportCmd(),
+		a.newStateCmd(),
 	)
 	return root
 }
