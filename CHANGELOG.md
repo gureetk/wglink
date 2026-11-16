@@ -32,6 +32,12 @@ Notable changes to wglink. The format follows
   - Spokes connect only to the hub and send the whole network through it.
   - The hub turns on forwarding for its WireGuard interface alone.
   - `status` shows the hub's links.
+- Routed subnets:
+  - `wglink routes NETWORK NODE SUBNET...` lets the other members reach a
+    member's LAN through it, through the hub in hub networks.
+  - Auto subnets avoid routed ones.
+  - `plan` stops you when a member is on a routed subnet itself, and warns
+    when the routing member doesn't forward.
 
 ### Fixed
 

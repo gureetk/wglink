@@ -150,10 +150,29 @@ func (inv *Inventory) validateNetwork(n *Network) []error {
 	}
 	seenNode := map[string]bool{}
 	seenAddr := map[netip.Addr]string{}
+	type route struct {
+		p  netip.Prefix
+		by string
+	}
+	var routed []route
 	for _, m := range n.Members {
 		if _, ok := inv.Nodes[m.Name]; !ok {
 			add("member %s: no node with that name", m.Name)
 			continue
+		}
+		for _, r := range m.Routes {
+			switch {
+			case r.Bits() == 0:
+				add("member %s: routes: %s would send all traffic through %s, which wglink doesn't support", m.Name, r, m.Name)
+			case !n.Subnet.Auto() && r.Overlaps(n.Subnet.Prefix):
+				add("member %s: routes: %s overlaps the network's subnet %s", m.Name, r, n.Subnet)
+			}
+			for _, o := range routed {
+				if r.Overlaps(o.p) {
+					add("member %s: routes: %s overlaps %s, which %s routes", m.Name, r, o.p, o.by)
+				}
+			}
+			routed = append(routed, route{r, m.Name})
 		}
 		if seenNode[m.Name] {
 			add("member %s: listed twice", m.Name)

@@ -155,6 +155,9 @@ type Members []Member
 type Member struct {
 	Name string
 	Addr AddrSpec
+	// Routes are subnets behind the member, such as its LAN, that the other
+	// members reach through it.
+	Routes []netip.Prefix
 }
 
 // UnmarshalYAML accepts a sequence of names or a mapping of name to address spec.
@@ -171,11 +174,11 @@ func (m *Members) UnmarshalYAML(n *yaml.Node) error {
 	case yaml.MappingNode:
 		for i := 0; i+1 < len(n.Content); i += 2 {
 			k, v := n.Content[i], n.Content[i+1]
-			spec, err := memberSpec(v)
+			spec, routes, err := memberSpec(v)
 			if err != nil {
 				return fmt.Errorf("line %d: member %s: %w", v.Line, k.Value, err)
 			}
-			*m = append(*m, Member{Name: k.Value, Addr: spec})
+			*m = append(*m, Member{Name: k.Value, Addr: spec, Routes: routes})
 		}
 	case yaml.ScalarNode:
 		if n.Tag != "!!null" {
@@ -188,31 +191,47 @@ func (m *Members) UnmarshalYAML(n *yaml.Node) error {
 }
 
 // memberSpec decodes a member value: an address spec or {ip: spec}.
-func memberSpec(v *yaml.Node) (AddrSpec, error) {
+func memberSpec(v *yaml.Node) (AddrSpec, []netip.Prefix, error) {
 	switch v.Kind {
 	case yaml.ScalarNode:
 		if v.Tag == "!!null" {
-			return AddrSpec{}, nil
+			return AddrSpec{}, nil, nil
 		}
-		return ParseAddrSpec(v.Value)
+		spec, err := ParseAddrSpec(v.Value)
+		return spec, nil, err
 	case yaml.MappingNode:
 		var spec AddrSpec
+		var routes []netip.Prefix
 		for i := 0; i+1 < len(v.Content); i += 2 {
 			k, val := v.Content[i], v.Content[i+1]
 			switch k.Value {
 			case "ip":
 				s, err := ParseAddrSpec(val.Value)
 				if err != nil {
-					return AddrSpec{}, err
+					return AddrSpec{}, nil, err
 				}
 				spec = s
+			case "routes":
+				if val.Kind != yaml.SequenceNode {
+					return AddrSpec{}, nil, errors.New("routes: want a list of subnets")
+				}
+				for _, r := range val.Content {
+					p, err := netip.ParsePrefix(r.Value)
+					if err != nil {
+						return AddrSpec{}, nil, fmt.Errorf("routes: %q isn't a subnet like 192.168.50.0/24", r.Value)
+					}
+					if p != p.Masked() {
+						return AddrSpec{}, nil, fmt.Errorf("routes: write %s as %s", p, p.Masked())
+					}
+					routes = append(routes, p)
+				}
 			default:
-				return AddrSpec{}, unknownField(k.Value, "member")
+				return AddrSpec{}, nil, unknownField(k.Value, "member")
 			}
 		}
-		return spec, nil
+		return spec, routes, nil
 	}
-	return AddrSpec{}, errors.New("want an address like auto, .10 or 10.99.0.10")
+	return AddrSpec{}, nil, errors.New("want an address like auto, .10 or 10.99.0.10")
 }
 
 // Load reads and validates the inventory at path.
@@ -367,7 +386,7 @@ var fields = map[string][]string{
 	"guestref":  {"via", "vmid"},
 	"manual":    {"pubkey"},
 	"network":   {"subnet", "port", "iface", "mtu", "keepalive", "hub", "members"},
-	"member":    {"ip"},
+	"member":    {"ip", "routes"},
 }
 
 // unknownField reports a bad key, suggesting the closest valid one.

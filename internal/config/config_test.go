@@ -53,7 +53,7 @@ networks:
       nas: ".10"
       pve1: 172.30.5.20
       ct101: auto
-      laptop: { ip: .30 }
+      laptop: { ip: .30, routes: [192.168.60.0/24] }
 `
 
 func TestParseExample(t *testing.T) {
@@ -69,6 +69,9 @@ func TestParseExample(t *testing.T) {
 	}
 	if n := inv.Nodes["vm200"]; n.Reach() != ReachQM || n.QM.Via != "pve1" || n.QM.VMID != 200 {
 		t.Errorf("vm200 = %+v", n)
+	}
+	if m, _ := inv.Networks["backup"].Member("laptop"); len(m.Routes) != 1 || m.Routes[0].String() != "192.168.60.0/24" || m.Addr.String() != ".30" {
+		t.Errorf("laptop in backup = %+v", m)
 	}
 	if n := inv.Nodes["phone"]; n.Reach() != ReachManual || n.Manual.PubKey != "yAnz5TF+lXXJte14tji3zlMNq+hd2rYUIgJBgB3fBmk=" {
 		t.Errorf("phone = %+v", n)
@@ -141,6 +144,11 @@ func TestParseErrors(t *testing.T) {
 		{"manual typo", "version: 1\nnodes:\n  p:\n    manual: {pubky: x}\n", `unknown field "pubky" in manual (did you mean "pubkey"?)`},
 		{"manual endpoint", "version: 1\nnodes:\n  a: {ssh: a}\n  p: {manual: {}}\nnetworks:\n  n: {members: [a, p]}\n", "node p: endpoint: required for manual nodes"},
 		{"via manual", "version: 1\nnodes:\n  p: {manual: {}}\n  c: {pct: {via: p, vmid: 101}}\n", "pct.via: p must be"},
+		{"route not masked", "version: 1\nnodes:\n  a: {ssh: a}\nnetworks:\n  n: {members: {a: {routes: [192.168.50.1/24]}}}\n", "routes: write 192.168.50.1/24 as 192.168.50.0/24"},
+		{"route default", "version: 1\nnodes:\n  a: {ssh: a}\nnetworks:\n  n: {members: {a: {routes: [0.0.0.0/0]}}}\n", "would send all traffic through a"},
+		{"route in subnet", "version: 1\nnodes:\n  a: {ssh: a}\nnetworks:\n  n: {subnet: 10.9.0.0/24, members: {a: {routes: [10.9.0.0/25]}}}\n", "overlaps the network's subnet"},
+		{"routes overlap", "version: 1\nnodes:\n  a: {ssh: a}\n  b: {ssh: b}\nnetworks:\n  n: {members: {a: {routes: [192.168.0.0/16]}, b: {routes: [192.168.50.0/24]}}}\n", "192.168.50.0/24 overlaps 192.168.0.0/16, which a routes"},
+		{"routes typo", "version: 1\nnodes:\n  a: {ssh: a}\nnetworks:\n  n: {members: {a: {route: [192.168.0.0/16]}}}\n", `unknown field "route" in member (did you mean "routes"?)`},
 		{"sudo exec", "version: 1\nnodes:\n  a: {exec: [x], sudo: true}\n", "sudo only applies"},
 		{"service", "version: 1\nnodes:\n  a: {ssh: a, service: openrc}\n", "service:"},
 		{"endpoint needed", "version: 1\nnodes:\n  a: {ssh: a}\n  b: {local: true}\nnetworks:\n  n: {members: [a, b]}\n", "node b: endpoint: required"},

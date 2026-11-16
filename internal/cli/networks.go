@@ -462,9 +462,13 @@ func (a *app) newNetShowCmd() *cobra.Command {
 				if sn != nil && sn.Members[m.Name] != nil && sn.Members[m.Name].IP.IsValid() {
 					addr = sn.Members[m.Name].IP.String()
 				}
-				rows = append(rows, []string{m.Name, addr, how})
+				var routes []string
+				for _, r := range m.Routes {
+					routes = append(routes, r.String())
+				}
+				rows = append(rows, []string{m.Name, addr, how, orDash(strings.Join(routes, ","))})
 			}
-			table(out, "MEMBER ADDRESS CHOSEN", rows)
+			table(out, "MEMBER ADDRESS CHOSEN ROUTES", rows)
 			return nil
 		},
 	}
