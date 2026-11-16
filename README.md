@@ -263,7 +263,8 @@ Network settings, all optional:
 What wglink picks is recorded in `wglink.state.json` next to the inventory, so
 addresses don't move when you add members later. The state file holds public
 keys, addresses and hashes, and no secrets. Keep both files together, for
-example in a private git repository.
+example in a private git repository. If the state file is lost,
+`wglink state rebuild` recovers it from the configs on the nodes.
 
 ## Status
 
@@ -392,8 +393,6 @@ It removes the old release and tag only after the new build passes.
 
 ## Roadmap
 
-- **0.2:**
-  - Rebuilding the state file from the nodes.
 - **0.3:**
   - A terminal UI.
   - Hub-and-spoke networks.

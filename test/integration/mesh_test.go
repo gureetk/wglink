@@ -3,6 +3,7 @@
 package integration
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -159,6 +160,21 @@ func TestMesh(t *testing.T) {
 		}
 	})
 
+	t.Run("a lost state file is rebuilt from the nodes", func(t *testing.T) {
+		l := l.in(t)
+		path := filepath.Join(l.dir, "wglink.state.json")
+		want, _ := os.ReadFile(path)
+		os.Remove(path)
+		out := l.wglink("state", "rebuild")
+		got, _ := os.ReadFile(path)
+		if !sameJSON(got, want) {
+			t.Errorf("rebuilt state:\n%s\nwant:\n%s\noutput:\n%s", got, want, out)
+		}
+		if plan := l.wglink("plan"); !strings.Contains(plan, "Everything is up to date.") {
+			t.Errorf("plan after rebuild:\n%s", plan)
+		}
+	})
+
 	t.Run("leaving takes the tunnel down", func(t *testing.T) {
 		l := l.in(t)
 		l.wglink("net", "leave", "lab", "charlie")
@@ -198,4 +214,15 @@ func (l *lab) pingAll(members []string, addrs map[string]string) {
 			}
 		}
 	}
+}
+
+// sameJSON reports whether two JSON documents hold the same data.
+func sameJSON(a, b []byte) bool {
+	var x, y any
+	if json.Unmarshal(a, &x) != nil || json.Unmarshal(b, &y) != nil {
+		return false
+	}
+	xa, _ := json.Marshal(x)
+	ya, _ := json.Marshal(y)
+	return string(xa) == string(ya)
 }
