@@ -23,6 +23,13 @@ Notable changes to wglink. The format follows
     by itself after a minute.
   - `--no-revert` turns this off, and `plan` warns about SSH nodes without
     systemd.
+- `wglink discover HOST` lists a Proxmox host's containers and VMs with their
+  addresses. `--add` adds the running ones as nodes.
+
+### Fixed
+
+- A config edited by hand without a final newline no longer breaks `plan`
+  and `status` for its node.
 
 ## [0.1.0] - 2026-11-16
 

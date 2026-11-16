@@ -166,6 +166,22 @@ Run "wglink apply" to make these changes.
 Add `--sudo` to SSH and local nodes to use `sudo -n` when the login isn't
 root. wglink never asks for or stores a password.
 
+On a Proxmox host that is already a node, `wglink discover` lists its
+containers and VMs with their addresses. With `--add`, it adds the running
+ones as nodes, reached through the host:
+
+```console
+$ wglink discover pve1 --add
+VMID   TYPE   NAME             STATUS    ADDRESS         NODE
+101    lxc    media            running   192.168.1.101   media (added)
+102    lxc    test             stopped   -               -
+200    qemu   home-assistant   running   192.168.1.200   home-assistant (added)
+201    qemu   win11            running   -               QEMU guest agent is not running
+
+Added media, home-assistant. Next, put them in a network: wglink net join NETWORK media home-assistant
+Left out win11 201 (QEMU guest agent is not running); add it by hand, for example with --ssh.
+```
+
 Peers dial each node at its **endpoint**. For SSH nodes the endpoint is the
 host that SSH connects to (as `ssh -G` resolves it), so most nodes need
 nothing more. Other nodes need `--endpoint ADDRESS`. A machine behind NAT that
@@ -377,7 +393,6 @@ It removes the old release and tag only after the new build passes.
 ## Roadmap
 
 - **0.2:**
-  - `wglink discover` to add Proxmox guests.
   - Rebuilding the state file from the nodes.
 - **0.3:**
   - A terminal UI.

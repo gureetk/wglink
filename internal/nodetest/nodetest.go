@@ -67,6 +67,17 @@ disable) rm -f "$STUB/up/$iface" "$STUB/active/$unit" ;;
 stop) shift; for u; do rm -f "$STUB/timers/$u"; done ;;
 esac
 `,
+	// pvesh answers "get PATH" from $STUB/pvesh_PATH, with slashes as
+	// underscores, or fails with $STUB/pvesh_PATH.err.
+	"pvesh": `#!/bin/sh
+echo "pvesh $*" >> "$STUB/log"
+[ "$1" = get ] || exit 2
+f="$STUB/pvesh$(printf '%s' "$2" | tr / _)"
+if [ -e "$f.err" ]; then cat "$f.err" >&2; exit 1; fi
+if [ -e "$f" ]; then cat "$f"; exit 0; fi
+echo "no such path: $2" >&2
+exit 1
+`,
 	// Timers are files holding the command to run; FireRevert runs one.
 	"systemd-run": `#!/bin/sh
 echo "systemd-run $*" >> "$STUB/log"
