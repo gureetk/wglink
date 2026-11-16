@@ -10,6 +10,12 @@ Notable changes to wglink. The format follows
 
 - Proxmox VMs as nodes, through the QEMU guest agent: `wglink node add vm200
   --qm 200 --via pve1`. The VM needs `qemu-guest-agent` and no SSH.
+- Manual nodes for devices wglink can't reach, such as phones:
+  - `wglink node add phone --manual` adds one.
+  - `wglink export lab phone` prints its config and makes its key pair on
+    the first run.
+  - `plan` says when a device's config is out of date, and `status` judges
+    its links from the other end.
 
 ## [0.1.0] - 2026-11-16
 

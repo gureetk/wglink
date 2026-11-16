@@ -129,6 +129,36 @@ func TestMesh(t *testing.T) {
 		}
 	})
 
+	t.Run("a manual peer runs its exported config", func(t *testing.T) {
+		l := l.in(t)
+		// echo stands in for a phone: wglink never runs anything there.
+		l.netnsNode("echo", 9)
+		l.wglink("node", "add", "echo", "--manual", "--keepalive", "25")
+		l.wglink("net", "join", "lab", "echo")
+		conf := filepath.Join(l.nodes["echo"].wgDir, "wg-lab.conf")
+		l.wglink("export", "lab", "echo", "-o", conf)
+		l.wglink("apply", "--yes")
+		l.mustOn("echo", "wg-quick", "up", "wg-lab")
+		addrs := l.addrs("lab")
+		for _, name := range members {
+			l.ping("echo", addrs[name])
+			l.ping(name, addrs["echo"])
+		}
+		status, err := l.tryWglink("status", "--exit-code")
+		if err != nil || !strings.Contains(status, "echo     "+addrs["echo"]) || !strings.Contains(status, "manual") {
+			t.Errorf("status: %v\n%s", err, status)
+		}
+		if plan := l.wglink("plan"); !strings.Contains(plan, "Everything is up to date.") {
+			t.Errorf("plan:\n%s", plan)
+		}
+		l.wglink("net", "leave", "lab", "echo")
+		l.wglink("apply", "--yes")
+		l.wglink("node", "rm", "echo")
+		if peers := strings.Fields(l.mustOn("alpha", "wg", "show", "wg-lab", "peers")); len(peers) != len(members)-1 {
+			t.Errorf("alpha's peers after echo left: %v", peers)
+		}
+	})
+
 	t.Run("leaving takes the tunnel down", func(t *testing.T) {
 		l := l.in(t)
 		l.wglink("net", "leave", "lab", "charlie")

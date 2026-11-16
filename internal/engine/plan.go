@@ -26,6 +26,7 @@ const (
 	Restart               // interface settings change
 	Start                 // config is right but the interface is down
 	Skip                  // unreachable, or left out with --node
+	Export                // a manual node needs its config exported again
 )
 
 // Options narrow a plan.
@@ -98,6 +99,19 @@ func (p *Plan) Changes() (create, live, restart, remove int) {
 	return
 }
 
+// Exports counts manual nodes whose config needs exporting.
+func (p *Plan) Exports() int {
+	n := 0
+	for _, np := range p.Networks {
+		for _, m := range np.Members {
+			if m.Action == Export {
+				n++
+			}
+		}
+	}
+	return n
+}
+
 // Empty reports whether applying would change nothing on any node.
 func (p *Plan) Empty() bool {
 	c, l, r, d := p.Changes()
@@ -136,7 +150,9 @@ func (s *Session) Plan(ctx context.Context, opts Options) (*Plan, error) {
 	for _, name := range scoped {
 		if n, ok := s.Inv.Networks[name]; ok {
 			for _, m := range n.Members {
-				want(m.Name, n.IfaceName())
+				if !s.manual(m.Name) {
+					want(m.Name, n.IfaceName())
+				}
 			}
 		}
 		if sn, ok := s.State.Networks[name]; ok {
@@ -146,7 +162,9 @@ func (s *Session) Plan(ctx context.Context, opts Options) (*Plan, error) {
 					p.warn("%s is no longer in wglink.yaml; remove %s on it by hand", m, stateIface(name, sn.Iface))
 					continue
 				}
-				want(m, stateIface(name, sn.Iface))
+				if !s.manual(m) {
+					want(m, stateIface(name, sn.Iface))
+				}
 			}
 		}
 	}
@@ -231,6 +249,12 @@ func (s *Session) scope(names []string) ([]string, error) {
 		all[n] = true
 	}
 	return keys(all), nil
+}
+
+// manual reports whether a node is one wglink can't reach, such as a phone.
+func (s *Session) manual(name string) bool {
+	n, ok := s.Inv.Nodes[name]
+	return ok && n.Manual != nil
 }
 
 // willKey reports whether this run can create a key on the node.
@@ -338,7 +362,9 @@ func (s *Session) planNetwork(ctx context.Context, p *Plan, n *config.Network) *
 	sn := s.State.Networks[n.Name]
 	for _, m := range n.Members {
 		key := ""
-		if f := p.facts[m.Name]; f != nil {
+		if mn := s.Inv.Nodes[m.Name].Manual; mn != nil {
+			key = mn.PubKey
+		} else if f := p.facts[m.Name]; f != nil {
 			if i := f.Ifaces[np.Iface]; i != nil {
 				key = i.PubKey
 			}
@@ -351,7 +377,11 @@ func (s *Session) planNetwork(ctx context.Context, p *Plan, n *config.Network) *
 		p.warn("network %s has fewer than two members, so there is nothing to connect yet", n.Name)
 	}
 	for _, m := range n.Members {
-		if p.keys[n.Name][m.Name] == "" && !p.willKey(m.Name) {
+		switch {
+		case p.keys[n.Name][m.Name] != "" || p.willKey(m.Name):
+		case s.manual(m.Name):
+			p.warn("network %s: %s has no key yet, so its peers leave it out; run \"wglink export %s %s\" to make one", n.Name, m.Name, n.Name, m.Name)
+		default:
 			p.warn("network %s: %s has no key yet, so its peers leave it out until it is applied too", n.Name, m.Name)
 		}
 	}
@@ -360,6 +390,10 @@ func (s *Session) planNetwork(ctx context.Context, p *Plan, n *config.Network) *
 	for _, m := range n.Members {
 		mp := &MemberPlan{Node: m.Name, Addr: a.Addrs[m.Name]}
 		np.Members = append(np.Members, mp)
+		if s.manual(m.Name) {
+			s.planManual(ctx, p, n, mp, sn)
+			continue
+		}
 		f := p.facts[m.Name]
 		switch {
 		case f == nil:
@@ -395,6 +429,25 @@ func (s *Session) planNetwork(ctx context.Context, p *Plan, n *config.Network) *
 		}
 	}
 	return np
+}
+
+// planManual checks whether a manual node's exported config is still current.
+func (s *Session) planManual(ctx context.Context, p *Plan, n *config.Network, mp *MemberPlan, sn *state.Network) {
+	hint := fmt.Sprintf("run \"wglink export %s %s\" and load it there", n.Name, mp.Node)
+	var sm *state.Member
+	if sn != nil {
+		sm = sn.Members[mp.Node]
+	}
+	switch {
+	case p.keys[n.Name][mp.Node] == "":
+		mp.Action, mp.Reasons = Export, []string{"no key yet: " + hint}
+	case sm == nil || sm.Applied == "":
+		mp.Action, mp.Reasons = Export, []string{"not exported yet: " + hint}
+	case sm.Applied != wgconf.Hash(ExportText(s.desired(ctx, p, n, mp.Node), mp.Node)):
+		mp.Action, mp.Reasons = Export, []string{"its config changed: " + hint}
+	default:
+		mp.Action = Keep
+	}
 }
 
 // compare classifies an existing managed config against the desired one.
@@ -439,6 +492,9 @@ func (s *Session) desired(ctx context.Context, p *Plan, n *config.Network, membe
 		Addresses:  []netip.Prefix{netip.PrefixFrom(a.Addrs[member], a.Subnet.Bits())},
 		ListenPort: a.Port,
 		MTU:        n.MTU,
+	}
+	if e := s.Inv.Nodes[member].Endpoint; s.manual(member) && e != nil && e.None {
+		i.ListenPort = 0 // nobody dials it, so any port will do
 	}
 	keepalive := n.Keepalive
 	if k := s.Inv.Nodes[member].Keepalive; k != 0 {

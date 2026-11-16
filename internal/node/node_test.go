@@ -397,20 +397,6 @@ func TestParseUDP(t *testing.T) {
 	}
 }
 
-func TestValidKey(t *testing.T) {
-	for k, want := range map[string]bool{
-		pubOf1: true,
-		"q3F4sTqKG6c4kBxD7l6ZXpXwFfXoXJpPq2mWm3c1yE0=": true,
-		"short=": false,
-		"q3F4sTqKG6c4kBxD7l6ZXpXwFfXoXJpPq2mWm3c1yE0":  false,
-		"q3F4sTqKG6c4kBxD7l6ZXpXwFfXoXJpPq2mWm3c1y;0=": false,
-	} {
-		if ValidKey(k) != want {
-			t.Errorf("ValidKey(%q) = %v", k, !want)
-		}
-	}
-}
-
 func TestTruncatedOutput(t *testing.T) {
 	if _, err := parseProbe([]byte("@probe 1\n@hostname x\n")); err == nil {
 		t.Error("parseProbe accepted output without @end")

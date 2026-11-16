@@ -109,7 +109,7 @@ func (n Node) EnsureKey(ctx context.Context, iface string) (pub string, created 
 			pub = d.arg
 		}
 	}
-	if !ValidKey(pub) {
+	if !wgconf.ValidKey(pub) {
 		return "", false, fmt.Errorf("%s: got no valid public key for %s", n.Runner, iface)
 	}
 	return pub, created, nil
@@ -166,11 +166,6 @@ func (n Node) Remove(ctx context.Context, iface string) error {
 	}
 	_, err := n.run(ctx, "remove", map[string]string{"WG_IFACE": iface})
 	return err
-}
-
-// ValidKey reports whether s is a base64 WireGuard key.
-func ValidKey(s string) bool {
-	return len(s) == 44 && strings.HasSuffix(s, "=") && strings.Trim(s[:43], "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/") == ""
 }
 
 // directive is one "@key arg" line from a script, with any "|" lines after it.

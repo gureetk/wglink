@@ -45,16 +45,23 @@ type Node struct {
 	Name string `yaml:"-"`
 
 	// Reach methods; exactly one is set.
-	SSH   string    `yaml:"ssh"`
-	Local bool      `yaml:"local"`
-	Exec  []string  `yaml:"exec"`
-	PCT   *GuestRef `yaml:"pct"`
-	QM    *GuestRef `yaml:"qm"`
+	SSH    string    `yaml:"ssh"`
+	Local  bool      `yaml:"local"`
+	Exec   []string  `yaml:"exec"`
+	PCT    *GuestRef `yaml:"pct"`
+	QM     *GuestRef `yaml:"qm"`
+	Manual *Manual   `yaml:"manual"`
 
 	Sudo      bool      `yaml:"sudo"`
 	Endpoint  *Endpoint `yaml:"endpoint"`
 	Keepalive int       `yaml:"keepalive"`
 	Service   string    `yaml:"service"`
+}
+
+// Manual is a peer wglink can't reach, such as a phone. Other members add
+// it as a peer, and "wglink export" prints its own config.
+type Manual struct {
+	PubKey string `yaml:"pubkey"` // empty until the first export
 }
 
 // GuestRef points at a Proxmox guest on a host node.
@@ -67,11 +74,12 @@ type GuestRef struct {
 type Reach string
 
 const (
-	ReachSSH   Reach = "ssh"
-	ReachLocal Reach = "local"
-	ReachExec  Reach = "exec"
-	ReachPCT   Reach = "pct"
-	ReachQM    Reach = "qm"
+	ReachSSH    Reach = "ssh"
+	ReachLocal  Reach = "local"
+	ReachExec   Reach = "exec"
+	ReachPCT    Reach = "pct"
+	ReachQM     Reach = "qm"
+	ReachManual Reach = "manual"
 )
 
 // Reach returns the node's reach method, or "" if none or several are set.
@@ -91,6 +99,9 @@ func (n *Node) Reach() Reach {
 	}
 	if n.QM != nil {
 		set = append(set, ReachQM)
+	}
+	if n.Manual != nil {
+		set = append(set, ReachManual)
 	}
 	if len(set) != 1 {
 		return ""
@@ -343,8 +354,9 @@ func loadError(name string, err error) error {
 var fields = map[string][]string{
 	"inventory": {"version", "defaults", "nodes", "networks"},
 	"defaults":  {"pool", "prefix", "port"},
-	"node":      {"ssh", "local", "exec", "pct", "qm", "sudo", "endpoint", "keepalive", "service"},
+	"node":      {"ssh", "local", "exec", "pct", "qm", "manual", "sudo", "endpoint", "keepalive", "service"},
 	"guestref":  {"via", "vmid"},
+	"manual":    {"pubkey"},
 	"network":   {"subnet", "port", "iface", "mtu", "keepalive", "members"},
 	"member":    {"ip"},
 }

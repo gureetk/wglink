@@ -143,7 +143,7 @@ func TestFreshNetwork(t *testing.T) {
 		t.Errorf("state = %+v", lab)
 	}
 	nas := lab.Members["nas"]
-	if !node.ValidKey(nas.PubKey) || nas.IP.String() != "10.99.0.2" || nas.Applied == "" {
+	if !wgconf.ValidKey(nas.PubKey) || nas.IP.String() != "10.99.0.2" || nas.Applied == "" {
 		t.Errorf("nas state = %+v", nas)
 	}
 	pve := l.conf("pve1", "wg-lab")

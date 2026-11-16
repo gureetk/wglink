@@ -79,6 +79,12 @@ func (s *Session) Apply(ctx context.Context, p *Plan, logf Logf) error {
 			if mp.Action == Skip {
 				continue
 			}
+			if s.manual(mp.Node) {
+				// Nothing to write; export records what the device was given.
+				sm := sn.Member(mp.Node)
+				sm.IP, sm.PubKey = mp.Addr, p.keys[np.Name][mp.Node]
+				continue
+			}
 			want := s.desired(ctx, p, n, mp.Node)
 			text := wgconf.Render(want)
 			sm := sn.Member(mp.Node)
@@ -144,6 +150,9 @@ func (s *Session) write(ctx context.Context, p *Plan, np *NetPlan, mp *MemberPla
 // stillPresent reports whether a former member still has the interface,
 // in which case its state stays until a removal runs.
 func (s *Session) stillPresent(p *Plan, nodeName, iface string) bool {
+	if s.manual(nodeName) {
+		return false
+	}
 	if f := p.facts[nodeName]; f != nil {
 		return f.Managed[iface] != ""
 	}
