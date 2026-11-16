@@ -1,4 +1,4 @@
-module codeberg.org/gureetk/wglink
+module github.com/gureetk/wglink
 
 go 1.26.0
 

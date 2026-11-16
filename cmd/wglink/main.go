@@ -4,7 +4,7 @@ package main
 import (
 	"os"
 
-	"codeberg.org/gureetk/wglink/internal/cli"
+	"github.com/gureetk/wglink/internal/cli"
 )
 
 func main() {
