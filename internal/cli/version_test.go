@@ -3,6 +3,7 @@ package cli
 import (
 	"bytes"
 	"io"
+	"strings"
 	"testing"
 )
 
@@ -20,9 +21,27 @@ func TestVersion(t *testing.T) {
 	}
 }
 
-func TestVersionRejectsArgs(t *testing.T) {
-	if _, err := runCLI("version", "extra"); err == nil {
-		t.Error("version with an extra argument succeeded, want an error")
+func TestNoArgsPrintsHelp(t *testing.T) {
+	got, err := runCLI()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(got, "Usage:") {
+		t.Errorf("output = %q, want help text", got)
+	}
+}
+
+func TestRejectsBadArgs(t *testing.T) {
+	for _, args := range [][]string{
+		{"bogus"},
+		{"version", "extra"},
+		{"--no-such-flag"},
+	} {
+		t.Run(strings.Join(args, " "), func(t *testing.T) {
+			if _, err := runCLI(args...); err == nil {
+				t.Error("succeeded, want an error")
+			}
+		})
 	}
 }
 
@@ -32,7 +51,8 @@ func runCLI(args ...string) (string, error) {
 	root := newRoot("v1.2.3")
 	root.SetOut(&out)
 	root.SetErr(io.Discard)
-	root.SetArgs(args)
+	// A nil slice makes cobra fall back to os.Args.
+	root.SetArgs(append([]string{}, args...))
 	err := root.Execute()
 	return out.String(), err
 }
