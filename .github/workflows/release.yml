@@ -13,6 +13,10 @@ on:
       commit:
         description: Commit to release (default the branch it runs on)
         required: false
+      replace:
+        description: Delete an existing release and tag of this version first
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -25,6 +29,7 @@ jobs:
     env:
       TAG: ${{ github.event_name == 'push' && github.ref_name || inputs.version }}
       COMMIT: ${{ inputs.commit || github.sha }}
+      REPLACE: ${{ inputs.replace && 'true' || 'false' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -39,8 +44,11 @@ jobs:
           *) echo "::error::version must look like v1.2.3, not $TAG"; exit 1 ;;
           esac
           if git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then
-            echo "::error::$TAG already exists; push it or pick another version"
-            exit 1
+            if [ "$REPLACE" != true ]; then
+              echo "::error::$TAG already exists; tick \"replace\" to delete it and its release first"
+              exit 1
+            fi
+            git tag -d "$TAG"
           fi
           git checkout -q --detach "$COMMIT"
           git tag "$TAG"
@@ -56,11 +64,42 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          if gh release view "$TAG" >/dev/null 2>&1; then
+          sha=$(git rev-parse HEAD)
+          # tag_commit prints the commit the tag points at on GitHub, if it exists.
+          tag_commit() {
+            ref=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$TAG" --jq '.object.type + " " + .object.sha' 2>/dev/null) || return 0
+            case $ref in
+            "tag "*) gh api "repos/$GITHUB_REPOSITORY/git/tags/${ref#tag }" --jq .object.sha ;;
+            *) echo "${ref#* }" ;;
+            esac
+          }
+          existing=false
+          if gh release view "$TAG" >/dev/null 2>&1; then existing=true; fi
+          if [ "$REPLACE" = true ]; then
+            # Only now that the new build passed: remove the old release and tag.
+            if [ "$existing" = true ]; then
+              gh release delete "$TAG" --yes --cleanup-tag
+              existing=false
+            fi
+            if [ -n "$(tag_commit)" ]; then
+              gh api -X DELETE "repos/$GITHUB_REPOSITORY/git/refs/tags/$TAG"
+            fi
+            for _ in $(seq 30); do
+              if [ -z "$(tag_commit)" ]; then break; fi
+              sleep 1
+            done
+          fi
+          if [ "$existing" = true ]; then
             # Someone made the release on the website; add the files to it.
             gh release upload "$TAG" --clobber dist/*.tar.gz dist/SHA256SUMS
           else
-            gh release create "$TAG" --target "$(git rev-parse HEAD)" \
+            gh release create "$TAG" --target "$sha" \
               --title "wglink $TAG" --notes-file dist/NOTES.md \
               dist/*.tar.gz dist/SHA256SUMS
+          fi
+          # The published tag must be the commit that was built.
+          got=$(tag_commit)
+          if [ "$got" != "$sha" ]; then
+            echo "::error::$TAG points at ${got:-nothing}, but $sha was built"
+            exit 1
           fi

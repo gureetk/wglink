@@ -353,7 +353,8 @@ CI runs them on every pull request, with the runner itself as a systemd node.
 To release, add the version's section to `CHANGELOG.md`, then push a `vX.Y.Z`
 tag, or run the **release** workflow from the Actions tab with the version
 (and, optionally, a commit). Either way it tests, builds the archives and
-publishes them.
+publishes them. To redo a release, run the workflow with **replace** ticked.
+It removes the old release and tag only after the new build passes.
 
 | Package | Role |
 | --- | --- |
