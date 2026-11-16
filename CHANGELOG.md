@@ -4,7 +4,11 @@ Notable changes to wglink. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [0.2.0] - 2026-11-16
+
+Reach more machines and shape networks more ways: Proxmox VMs, phones, hubs,
+routed subnets and IPv6, with key rotation, preshared keys, safer changes
+over SSH and a terminal dashboard.
 
 ### Added
 
@@ -104,4 +108,5 @@ that tunnels pass traffic.
   - End-to-end tests run against real WireGuard in network namespaces, over
     exec, SSH and systemd.
 
+[0.2.0]: https://github.com/gureetk/wglink/releases/tag/v0.2.0
 [0.1.0]: https://github.com/gureetk/wglink/releases/tag/v0.1.0
