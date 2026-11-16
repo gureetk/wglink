@@ -426,4 +426,11 @@ func TestUsedSkipsOwnInterfaces(t *testing.T) {
 	if fmt.Sprint(ports) != "[53 51830]" {
 		t.Errorf("ports = %v", ports)
 	}
+
+	// An interface reporting port 0 holds the port in its config.
+	f.WGPorts["wg-lab"] = 0
+	f.Ifaces = map[string]*node.Iface{"wg-lab": {Up: true, Config: wgconf.Render(wgconf.Interface{Network: "lab", ListenPort: 51820})}}
+	if _, ports := used(f, map[string]bool{"wg-lab": true}); fmt.Sprint(ports) != "[53 51830]" {
+		t.Errorf("ports with wg reporting 0 = %v", ports)
+	}
 }
