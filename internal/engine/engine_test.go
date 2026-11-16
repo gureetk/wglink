@@ -396,7 +396,7 @@ func TestCheckNodes(t *testing.T) {
 	if len(p.Warnings) != 0 {
 		t.Errorf("warnings: %v (service is systemd, so no reboot warning)", p.Warnings)
 	}
-	if installHint("alpine", "x") != "apk add x" || installHint("plan9", "x") != "install x" {
+	if InstallHint("alpine", "x") != "apk add x" || InstallHint("plan9", "x") != "install x" {
 		t.Error("installHint")
 	}
 }

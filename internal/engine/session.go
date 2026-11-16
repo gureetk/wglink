@@ -164,6 +164,15 @@ func (s *Session) Endpoint(ctx context.Context, name string) (config.Endpoint, e
 	return e, nil
 }
 
+// Check probes a node without asking about any interface.
+func (s *Session) Check(ctx context.Context, name string) (*node.Facts, error) {
+	nd, err := s.Node(name)
+	if err != nil {
+		return nil, err
+	}
+	return nd.Probe(ctx, nil)
+}
+
 // SaveState writes the state file.
 func (s *Session) SaveState() error { return s.State.Save(s.Dir) }
 
