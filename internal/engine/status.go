@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/gureetk/wglink/internal/config"
+	"github.com/gureetk/wglink/internal/ipam"
 	"github.com/gureetk/wglink/internal/node"
 	"github.com/gureetk/wglink/internal/state"
 	"github.com/gureetk/wglink/internal/wgconf"
@@ -64,6 +65,7 @@ type NetReport struct {
 	Name    string
 	Iface   string
 	Subnet  netip.Prefix // zero until applied
+	Subnet6 netip.Prefix // zero without IPv6
 	Port    uint16
 	Members []*MemberReport
 	Links   []*Link
@@ -73,6 +75,7 @@ type NetReport struct {
 type MemberReport struct {
 	Node  string
 	Addr  netip.Addr
+	Addr6 netip.Addr // zero without IPv6
 	State MemberState
 	Drift bool // its config changed since the last apply
 }
@@ -167,7 +170,7 @@ func (s *Session) recorded(network, member string) *state.Member {
 func (s *Session) netReport(n *config.Network, got map[string]*node.Status, errs map[string]error) *NetReport {
 	nr := &NetReport{Name: n.Name, Iface: s.liveIface(n)}
 	if sn := s.State.Networks[n.Name]; sn != nil {
-		nr.Subnet, nr.Port = sn.Subnet, sn.Port
+		nr.Subnet, nr.Subnet6, nr.Port = sn.Subnet, sn.Subnet6, sn.Port
 	}
 	views := map[string]*view{}
 	for _, m := range n.Members {
@@ -176,7 +179,11 @@ func (s *Session) netReport(n *config.Network, got map[string]*node.Status, errs
 			v.now, v.iface, v.pings = st.Now, st.Ifaces[nr.Iface], st.Pings
 		}
 		views[m.Name] = v
-		nr.Members = append(nr.Members, v.member())
+		mr := v.member()
+		if nr.Subnet6.IsValid() && mr.Addr.IsValid() {
+			mr.Addr6, _ = ipam.Addr6(nr.Subnet, nr.Subnet6, mr.Addr)
+		}
+		nr.Members = append(nr.Members, mr)
 	}
 	for i, a := range n.Members {
 		for _, b := range n.Members[i+1:] {

@@ -284,3 +284,23 @@ func TestPSKFlags(t *testing.T) {
 		t.Error("net create --psk didn't turn preshared keys on")
 	}
 }
+
+func TestIPv6Flags(t *testing.T) {
+	dir := newInventory(t)
+	wg(t, dir, "connect", "pve1", "nas", "--ipv6", "--name", "lab")
+	if v := load(t, dir).Networks["lab"].IPv6; !v.On || v.Subnet.IsValid() {
+		t.Errorf("connect --ipv6: %+v", v)
+	}
+	if out := wg(t, dir, "net", "show", "lab"); !strings.Contains(out, "ipv6       auto (picked at the next apply)") {
+		t.Errorf("net show:\n%s", out)
+	}
+	wg(t, dir, "net", "set", "lab", "--ipv6=fd12:3456:789a::/64")
+	if out := wg(t, dir, "net", "show", "lab"); !strings.Contains(out, "ipv6       fd12:3456:789a::/64 (pinned)") {
+		t.Errorf("net show:\n%s", out)
+	}
+	wgErr(t, dir, "--ipv6: ipv6 10.0.0.0/24: must be an IPv6 subnet", "net", "set", "lab", "--ipv6=10.0.0.0/24")
+	wg(t, dir, "net", "set", "lab", "--ipv6=off")
+	if v := load(t, dir).Networks["lab"].IPv6; v.On {
+		t.Errorf("--ipv6=off: %+v", v)
+	}
+}

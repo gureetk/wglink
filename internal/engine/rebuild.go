@@ -17,6 +17,7 @@ type Rebuilt struct {
 	Name    string
 	Iface   string
 	Subnet  netip.Prefix // zero if no member had the network's config
+	Subnet6 netip.Prefix // zero without IPv6
 	Port    uint16
 	Members []RebuiltMember
 	Notes   []string // disagreements between members' configs
@@ -120,6 +121,11 @@ func rebuildNetwork(n *config.Network, facts map[string]*node.Facts, errs map[st
 		}
 		configs[m.Name] = c
 		subnet, port := c.Addresses[0].Masked(), c.ListenPort
+		for _, a := range c.Addresses[1:] {
+			if a.Addr().Is6() && !sn.Subnet6.IsValid() {
+				sn.Subnet6 = a.Masked()
+			}
+		}
 		switch {
 		case !sn.Subnet.IsValid():
 			sn.Subnet, sn.Port = subnet, port
@@ -131,7 +137,7 @@ func rebuildNetwork(n *config.Network, facts map[string]*node.Facts, errs map[st
 	if len(configs) == 0 {
 		return r, nil
 	}
-	r.Subnet, r.Port = sn.Subnet, sn.Port
+	r.Subnet, r.Subnet6, r.Port = sn.Subnet, sn.Subnet6, sn.Port
 	for _, m := range n.Members {
 		rm := RebuiltMember{Node: m.Name}
 		switch {

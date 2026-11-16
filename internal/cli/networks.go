@@ -9,6 +9,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/gureetk/wglink/internal/config"
+	"github.com/gureetk/wglink/internal/ipam"
 )
 
 func (a *app) newNetCmd() *cobra.Command {
@@ -32,8 +33,8 @@ func (a *app) newNetCmd() *cobra.Command {
 
 // netFlags are the settings a network can be created or changed with.
 type netFlags struct {
-	subnet, port, mtu, keepalive, iface, hub string
-	psk                                      bool
+	subnet, ipv6, port, mtu, keepalive, iface, hub string
+	psk                                            bool
 }
 
 func (f *netFlags) add(cmd *cobra.Command, set bool) {
@@ -43,6 +44,8 @@ func (f *netFlags) add(cmd *cobra.Command, set bool) {
 	}
 	fl := cmd.Flags()
 	fl.StringVar(&f.subnet, "subnet", "", "IPv4 subnet, e.g. 10.99.0.0/24 (default: picked from the pool"+auto+")")
+	fl.StringVar(&f.ipv6, "ipv6", "", `add IPv6: alone for a random unique local /64, =PREFIX for a fixed one, or =off`)
+	fl.Lookup("ipv6").NoOptDefVal = "auto"
 	fl.StringVar(&f.port, "port", "", "UDP listen port on every member (default: first free from 51820"+auto+")")
 	fl.StringVar(&f.mtu, "mtu", "", "interface MTU (default: wg-quick decides"+auto+")")
 	fl.StringVar(&f.keepalive, "keepalive", "", "keepalive interval in seconds for every member (0 is off)")
@@ -119,6 +122,20 @@ func (f *netFlags) fields(cmd *cobra.Command) ([]config.Field, error) {
 			out = append(out, config.Field{Key: "hub"})
 		} else {
 			out = append(out, config.Field{Key: "hub", Value: f.hub})
+		}
+	}
+	if cmd.Flags().Changed("ipv6") {
+		v, err := config.ParseIPv6(f.ipv6)
+		if err != nil {
+			return nil, fmt.Errorf("--ipv6: %w", err)
+		}
+		switch {
+		case v.Subnet.IsValid():
+			out = append(out, config.Field{Key: "ipv6", Value: v.Subnet.String()})
+		case v.On:
+			out = append(out, config.Field{Key: "ipv6", Value: "auto"})
+		default:
+			out = append(out, config.Field{Key: "ipv6"})
 		}
 	}
 	if cmd.Flags().Changed("psk") {
@@ -453,6 +470,17 @@ func (a *app) newNetShowCmd() *cobra.Command {
 				}
 			}
 			setting("subnet", fixedSubnet, pickedSubnet)
+			if n.IPv6.On {
+				picked := ""
+				if sn != nil && sn.Subnet6.IsValid() {
+					picked = sn.Subnet6.String()
+				}
+				fixed := ""
+				if n.IPv6.Subnet.IsValid() {
+					fixed = n.IPv6.Subnet.String()
+				}
+				setting("ipv6", fixed, picked)
+			}
 			setting("port", fixedPort, pickedPort)
 			if n.MTU != 0 {
 				fmt.Fprintf(out, "%-10s %d\n", "mtu", n.MTU)
@@ -476,7 +504,11 @@ func (a *app) newNetShowCmd() *cobra.Command {
 					how = "pinned " + m.Addr.String()
 				}
 				if sn != nil && sn.Members[m.Name] != nil && sn.Members[m.Name].IP.IsValid() {
-					addr = sn.Members[m.Name].IP.String()
+					ip := sn.Members[m.Name].IP
+					addr = ip.String()
+					if ip6, ok := ipam.Addr6(sn.Subnet, sn.Subnet6, ip); ok && sn.Subnet6.IsValid() {
+						addr += ", " + ip6.String()
+					}
 				}
 				var routes []string
 				for _, r := range m.Routes {

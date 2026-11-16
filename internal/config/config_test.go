@@ -1,6 +1,7 @@
 package config
 
 import (
+	"net/netip"
 	"os"
 	"path/filepath"
 	"strings"
@@ -148,6 +149,9 @@ func TestParseErrors(t *testing.T) {
 		{"route default", "version: 1\nnodes:\n  a: {ssh: a}\nnetworks:\n  n: {members: {a: {routes: [0.0.0.0/0]}}}\n", "would send all traffic through a"},
 		{"route in subnet", "version: 1\nnodes:\n  a: {ssh: a}\nnetworks:\n  n: {subnet: 10.9.0.0/24, members: {a: {routes: [10.9.0.0/25]}}}\n", "overlaps the network's subnet"},
 		{"routes overlap", "version: 1\nnodes:\n  a: {ssh: a}\n  b: {ssh: b}\nnetworks:\n  n: {members: {a: {routes: [192.168.0.0/16]}, b: {routes: [192.168.50.0/24]}}}\n", "192.168.50.0/24 overlaps 192.168.0.0/16, which a routes"},
+		{"ipv6 v4", "version: 1\nnetworks:\n  n: {ipv6: 10.9.0.0/24, members: []}\n", "must be an IPv6 subnet"},
+		{"ipv6 host bits", "version: 1\nnetworks:\n  n: {ipv6: 'fd00::1/64', members: []}\n", "did you mean fd00::/64?"},
+		{"ipv6 route", "version: 1\nnodes:\n  a: {ssh: a}\nnetworks:\n  n: {ipv6: 'fd00:1::/64', members: {a: {routes: ['fd00:1::/80']}}}\n", "overlaps the network's IPv6 subnet"},
 		{"routes typo", "version: 1\nnodes:\n  a: {ssh: a}\nnetworks:\n  n: {members: {a: {route: [192.168.0.0/16]}}}\n", `unknown field "route" in member (did you mean "routes"?)`},
 		{"sudo exec", "version: 1\nnodes:\n  a: {exec: [x], sudo: true}\n", "sudo only applies"},
 		{"service", "version: 1\nnodes:\n  a: {ssh: a, service: openrc}\n", "service:"},
@@ -232,5 +236,28 @@ func TestEditDistance(t *testing.T) {
 		if got := editDistance(tc.a, tc.b); got != tc.want {
 			t.Errorf("editDistance(%q, %q) = %d, want %d", tc.a, tc.b, got, tc.want)
 		}
+	}
+}
+
+func TestParseIPv6(t *testing.T) {
+	for in, want := range map[string]IPv6{
+		"auto":                {On: true},
+		"true":                {On: true},
+		"off":                 {},
+		"fd12:3456:789a::/64": {On: true, Subnet: netip.MustParsePrefix("fd12:3456:789a::/64")},
+	} {
+		yaml := "version: 1\nnetworks:\n  n: {ipv6: '" + in + "', members: []}\n"
+		inv, err := Parse("wglink.yaml", []byte(yaml))
+		if err != nil {
+			t.Errorf("%s: %v", in, err)
+			continue
+		}
+		if got := inv.Networks["n"].IPv6; got != want {
+			t.Errorf("%s: got %+v, want %+v", in, got, want)
+		}
+	}
+	inv, err := Parse("wglink.yaml", []byte("version: 1\nnetworks:\n  n: {ipv6: true, members: []}\n"))
+	if err != nil || !inv.Networks["n"].IPv6.On {
+		t.Errorf("bare true: %+v %v", inv, err)
 	}
 }

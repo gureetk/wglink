@@ -123,7 +123,10 @@ type Network struct {
 	Hub string `yaml:"hub"`
 	// PSK gives each pair of peers a preshared key, a second secret on top
 	// of their key pairs.
-	PSK     bool    `yaml:"psk"`
+	PSK bool `yaml:"psk"`
+	// IPv6 adds an IPv6 subnet. Members get the address with the same host
+	// number as their IPv4 one.
+	IPv6    IPv6    `yaml:"ipv6"`
 	Members Members `yaml:"members"`
 }
 
@@ -388,7 +391,7 @@ var fields = map[string][]string{
 	"node":      {"ssh", "local", "exec", "pct", "qm", "manual", "sudo", "endpoint", "keepalive", "service"},
 	"guestref":  {"via", "vmid"},
 	"manual":    {"pubkey"},
-	"network":   {"subnet", "port", "iface", "mtu", "keepalive", "hub", "psk", "members"},
+	"network":   {"subnet", "ipv6", "port", "iface", "mtu", "keepalive", "hub", "psk", "members"},
 	"member":    {"ip", "routes"},
 }
 

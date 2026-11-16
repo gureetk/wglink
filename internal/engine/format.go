@@ -3,6 +3,7 @@ package engine
 import (
 	"fmt"
 	"io"
+	"net/netip"
 	"strings"
 )
 
@@ -22,13 +23,21 @@ func (s Style) Green(t string) string  { return s.wrap("32", t) }
 func (s Style) Yellow(t string) string { return s.wrap("33", t) }
 func (s Style) Red(t string) string    { return s.wrap("31", t) }
 
+// Subnets shows a network's IPv4 subnet, and its IPv6 one if it has one.
+func Subnets(v4, v6 netip.Prefix) string {
+	if v6.IsValid() {
+		return v4.String() + ", " + v6.String()
+	}
+	return v4.String()
+}
+
 // WritePlan prints a plan for people.
 func WritePlan(w io.Writer, p *Plan, st Style) {
 	for i, n := range p.Networks {
 		if i > 0 {
 			fmt.Fprintln(w)
 		}
-		fmt.Fprintf(w, "%s   %s   %s   udp/%d\n", st.Bold("network "+n.Name), n.Iface, n.Subnet, n.Port)
+		fmt.Fprintf(w, "%s   %s   %s   udp/%d\n", st.Bold("network "+n.Name), n.Iface, Subnets(n.Subnet, n.Subnet6), n.Port)
 		width := 0
 		for _, m := range n.Members {
 			width = max(width, len(m.Node))
@@ -140,7 +149,7 @@ func WriteStatus(w io.Writer, r *Report, st Style) {
 		}
 		where := "not applied yet"
 		if n.Subnet.IsValid() {
-			where = fmt.Sprintf("%s   udp/%d", n.Subnet, n.Port)
+			where = fmt.Sprintf("%s   udp/%d", Subnets(n.Subnet, n.Subnet6), n.Port)
 		}
 		fmt.Fprintf(w, "%s   %s   %s\n", st.Bold("network "+n.Name), n.Iface, where)
 		width := 0

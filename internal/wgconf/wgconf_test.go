@@ -213,6 +213,15 @@ func TestForwarding(t *testing.T) {
 	if c, why := Compare(spoke, hub); c != Restart || strings.Join(why, ",") != "forwarding on" {
 		t.Errorf("compare = %v %v", c, why)
 	}
+	// With IPv6, a second hook covers it where the kernel can.
+	hub.Addresses = append(hub.Addresses, netip.MustParsePrefix("fd00::1/64"))
+	text = Render(hub)
+	if !strings.Contains(string(text), "\nPostUp = "+Forward6Hook+"\n") {
+		t.Fatalf("rendered:\n%s", text)
+	}
+	if back, _ := Parse(text); !back.Forward || Hash(Render(back)) != Hash(text) {
+		t.Errorf("parsed back: %+v", back)
+	}
 	// Someone else's PostUp isn't wglink's forwarding hook.
 	other, _ := Parse([]byte("[Interface]\nAddress = 10.99.0.1/24\nPostUp = iptables -A FORWARD -i %i -j ACCEPT\n"))
 	if other.Forward {

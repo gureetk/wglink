@@ -51,6 +51,13 @@ Notable changes to wglink. The format follows
     match and keys that aren't loaded yet.
   - `rotate` replaces a member's preshared keys too, and `export` gives a
     phone new ones.
+- IPv6 inside the tunnels, with `--ipv6` on `connect`, `net create` and
+  `net set`:
+  - A random unique local /64 by default, or a fixed subnet.
+  - Each member's IPv6 address has the same host number as its IPv4 one.
+  - Hubs forward IPv6 for their interface alone on Linux 6.17 and later;
+    `plan` warns when an older hub forwards no IPv6.
+  - Routed subnets can be IPv6 too.
 
 ### Fixed
 

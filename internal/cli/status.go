@@ -127,16 +127,18 @@ type netOut struct {
 	Name    string      `json:"name"`
 	Iface   string      `json:"iface"`
 	Subnet  string      `json:"subnet,omitempty"`
+	Subnet6 string      `json:"subnet6,omitempty"`
 	Port    uint16      `json:"port,omitempty"`
 	Members []memberOut `json:"members"`
 	Links   []linkOut   `json:"links"`
 }
 
 type memberOut struct {
-	Node    string `json:"node"`
-	Address string `json:"address,omitempty"`
-	State   string `json:"state"`
-	Drift   bool   `json:"drift"`
+	Node     string `json:"node"`
+	Address  string `json:"address,omitempty"`
+	Address6 string `json:"address6,omitempty"`
+	State    string `json:"state"`
+	Drift    bool   `json:"drift"`
 }
 
 type healthOut struct {
@@ -181,6 +183,9 @@ func reportJSON(r *engine.Report) statusOut {
 	out := statusOut{Networks: []netOut{}}
 	for _, n := range r.Networks {
 		no := netOut{Name: n.Name, Iface: n.Iface, Port: n.Port, Members: []memberOut{}, Links: []linkOut{}}
+		if n.Subnet6.IsValid() {
+			no.Subnet6 = n.Subnet6.String()
+		}
 		if n.Subnet.IsValid() {
 			no.Subnet = n.Subnet.String()
 		}
@@ -188,6 +193,9 @@ func reportJSON(r *engine.Report) statusOut {
 			mo := memberOut{Node: m.Node, State: string(m.State), Drift: m.Drift}
 			if m.Addr.IsValid() {
 				mo.Address = m.Addr.String()
+				if m.Addr6.IsValid() {
+					mo.Address6 = m.Addr6.String()
+				}
 			}
 			no.Members = append(no.Members, mo)
 		}

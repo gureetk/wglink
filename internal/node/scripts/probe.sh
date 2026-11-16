@@ -16,6 +16,8 @@ main() {
 	if [ -d /sys/module/wireguard ]; then out "@module"; fi
 	out "@forward4 $(cat /proc/sys/net/ipv4/ip_forward 2>/dev/null || echo 0)"
 	out "@forward6 $(cat /proc/sys/net/ipv6/conf/all/forwarding 2>/dev/null || echo 0)"
+	# Newer kernels can forward IPv6 on one interface alone.
+	if [ -e /proc/sys/net/ipv6/conf/lo/force_forwarding ]; then out "@forward6iface"; fi
 	if have ip; then
 		out "@section addr"
 		ip -o addr show 2>/dev/null | raw || true

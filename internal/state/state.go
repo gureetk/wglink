@@ -29,6 +29,7 @@ type State struct {
 type Network struct {
 	Iface   string             `json:"iface,omitempty"`
 	Subnet  netip.Prefix       `json:"subnet,omitzero"`
+	Subnet6 netip.Prefix       `json:"subnet6,omitzero"`
 	Port    uint16             `json:"port,omitempty"`
 	Members map[string]*Member `json:"members"`
 }
