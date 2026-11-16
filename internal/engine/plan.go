@@ -305,9 +305,16 @@ func used(f *node.Facts, ours map[string]bool) ([]ipam.Use, []uint16) {
 	}
 	ownPorts := map[uint16]bool{}
 	for iface, port := range f.WGPorts {
-		if skip(iface) {
-			ownPorts[port] = true
+		if !skip(iface) {
+			continue
 		}
+		// wireguard-go on a host without IPv6 reports port 0; its config knows.
+		if i := f.Ifaces[iface]; port == 0 && i != nil {
+			if c, err := wgconf.Parse(i.Config); err == nil {
+				port = c.ListenPort
+			}
+		}
+		ownPorts[port] = true
 	}
 	var ports []uint16
 	for _, port := range f.UDPPorts {
