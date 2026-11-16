@@ -31,7 +31,7 @@ main() {
 	for f in "$WG_DIR"/*.conf; do
 		if [ -f "$f" ] && is_managed "$f"; then
 			name=${f##*/}
-			out "@managed ${name%.conf}"
+			out "@managed ${name%.conf} $(sed -n '1s/^# Managed by wglink (network \([a-z0-9-]*\)).*/\1/p' "$f")"
 		fi
 	done
 	# shellcheck disable=SC2086 # validated names, split on purpose

@@ -23,7 +23,7 @@ type Facts struct {
 	Routes   []Route
 	UDPPorts []uint16
 	WGPorts  map[string]uint16 // listen port per WireGuard interface
-	Managed  []string          // interfaces whose configs wglink wrote
+	Managed  map[string]string // interface -> network, for configs wglink wrote
 	Ifaces   map[string]*Iface // the interfaces asked about
 }
 
@@ -74,7 +74,7 @@ func (n Node) Probe(ctx context.Context, ifaces []string) (*Facts, error) {
 }
 
 func parseProbe(out []byte) (*Facts, error) {
-	f := &Facts{Have: map[string]bool{}, WGPorts: map[string]uint16{}, Ifaces: map[string]*Iface{}}
+	f := &Facts{Have: map[string]bool{}, WGPorts: map[string]uint16{}, Managed: map[string]string{}, Ifaces: map[string]*Iface{}}
 	var cur *Iface
 	sawEnd := false
 	for _, d := range parse(out) {
@@ -96,7 +96,8 @@ func parseProbe(out []byte) (*Facts, error) {
 		case "forward6":
 			f.Forward6 = d.arg == "1"
 		case "managed":
-			f.Managed = append(f.Managed, d.arg)
+			iface, network, _ := strings.Cut(d.arg, " ")
+			f.Managed[iface] = network
 		case "iface":
 			cur = &Iface{}
 			f.Ifaces[d.arg] = cur

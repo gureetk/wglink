@@ -21,6 +21,7 @@ type IfaceStatus struct {
 	PublicKey  string
 	ListenPort uint16
 	Peers      []PeerStatus
+	Config     []byte // public form of the config file, if any
 }
 
 // PeerStatus is one peer line from wg show dump.
@@ -82,6 +83,10 @@ func parseStatus(out []byte) (*Status, error) {
 				}
 			}
 			s.Ifaces[name] = st
+		case "config":
+			if st := s.Ifaces[d.arg]; st != nil {
+				st.Config = d.raw
+			}
 		case "ping":
 			f := strings.Fields(d.arg)
 			if len(f) < 2 {

@@ -15,6 +15,10 @@ main() {
 		wg show "$iface" dump |
 			awk 'BEGIN { FS = OFS = "\t" } NR == 1 { $1 = "(hidden)" } NR > 1 && $2 != "(none)" { $2 = "(set)" } { print }' |
 			raw
+		if [ -f "$WG_DIR/$iface.conf" ]; then
+			out "@config $iface"
+			public "$WG_DIR/$iface.conf" | raw
+		fi
 	done
 	# shellcheck disable=SC2086 # "iface,addr" pairs, split on purpose
 	for target in $WG_PING; do

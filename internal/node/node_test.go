@@ -362,7 +362,7 @@ func testProbe(t *testing.T, shell []string) {
 	if f.WGPorts["wg-lab"] != 51820 {
 		t.Errorf("wg ports = %v", f.WGPorts)
 	}
-	if strings.Join(f.Managed, ",") != "wg-lab" {
+	if len(f.Managed) != 1 || f.Managed["wg-lab"] != "lab" {
 		t.Errorf("managed = %v", f.Managed)
 	}
 	lab := f.Ifaces["wg-lab"]
@@ -402,6 +402,9 @@ func testStatus(t *testing.T, shell []string) {
 	if b.PresharedKey || b.Endpoint != "" || !b.Handshake.IsZero() || len(b.AllowedIPs) != 2 {
 		t.Errorf("peer B = %+v", b)
 	}
+	if lab.Config != nil {
+		t.Errorf("config reported for an interface with no file: %q", lab.Config)
+	}
 	if st.Ifaces["wg-down"].Up {
 		t.Error("wg-down reported up")
 	}
@@ -410,6 +413,26 @@ func testStatus(t *testing.T, shell []string) {
 	}
 	if p := st.Pings[netip.MustParseAddr("10.99.0.3")]; p.OK {
 		t.Errorf("ping .3 = %+v", p)
+	}
+}
+
+func TestStatusIncludesConfig(t *testing.T) {
+	for name, shell := range shells(t) {
+		t.Run(name, func(t *testing.T) {
+			e := setup(t, shell, "none")
+			e.n.EnsureKey(ctx, "wg-lab")
+			if _, err := e.n.Write(ctx, Write{Iface: "wg-lab", Config: rendered(false)}); err != nil {
+				t.Fatal(err)
+			}
+			e.write(t, "dump.wg-lab", "priv000000000000000000000000000000000000001=\t"+pubOf1+"\t51820\toff\n")
+			st, err := e.n.Status(ctx, []string{"wg-lab"}, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if wgconf.Hash(st.Ifaces["wg-lab"].Config) != wgconf.Hash(rendered(false)) {
+				t.Errorf("config = %q", st.Ifaces["wg-lab"].Config)
+			}
+		})
 	}
 }
 
