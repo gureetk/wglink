@@ -38,6 +38,12 @@ Notable changes to wglink. The format follows
   - Auto subnets avoid routed ones.
   - `plan` stops you when a member is on a routed subnet itself, and warns
     when the routing member doesn't forward.
+- `wglink rotate NETWORK [NODE...]` replaces members' keys:
+  - New keys are made on the members and loaded live on them and their
+    peers.
+  - The probe now compares the key file with the keys in the config and in
+    the running interface. `plan` loads a new key that hasn't been picked up,
+    for example after an interrupted rotation.
 
 ### Fixed
 

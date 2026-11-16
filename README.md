@@ -367,6 +367,10 @@ between runs, and each is validated and quoted.
   output, inventory or state. The one exception is a manual node: wglink
   can't run anything there, so `wglink export` makes its key and writes it
   into that one config, readable only by you.
+- **Keys you can replace.** `wglink rotate NETWORK [NODE...]` makes new keys
+  on the members and hands their peers the new public keys, all loaded live.
+  If a rotation is interrupted, the next `plan` notices a config or
+  interface still using the old key and loads the new one.
 - **No secrets on the controller.** The state file holds public keys,
   addresses and config hashes computed with the secrets removed.
 - **No shell on the controller.** wglink runs commands as argument lists.
@@ -431,7 +435,6 @@ It removes the old release and tag only after the new build passes.
 
 - **0.3:**
   - A terminal UI.
-  - Key rotation.
   - Preshared keys.
   - IPv6.
 

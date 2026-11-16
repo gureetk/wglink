@@ -504,3 +504,37 @@ func TestConfigWithoutFinalNewline(t *testing.T) {
 		})
 	}
 }
+
+func TestRotateKey(t *testing.T) {
+	for name, shell := range nodetest.Shells(t) {
+		t.Run(name, func(t *testing.T) {
+			nodetest.NeedStubbedIP(t, shell)
+			e := setup(t, shell, "none")
+			old, _, _ := e.n.EnsureKey(ctx, "wg-lab")
+			if _, err := e.n.Write(ctx, Write{Iface: "wg-lab", Config: rendered(false)}); err != nil {
+				t.Fatal(err)
+			}
+			f, _ := e.n.Probe(ctx, []string{"wg-lab"})
+			if i := f.Ifaces["wg-lab"]; i.ConfPub != old || i.LivePub != old || i.StaleKey() {
+				t.Fatalf("before rotating: %+v", i)
+			}
+
+			pub, err := e.n.RotateKey(ctx, "wg-lab")
+			if err != nil || pub == old || !wgconf.ValidKey(pub) {
+				t.Fatalf("RotateKey = %s, %v (old %s)", pub, err, old)
+			}
+			// Until the config is written again, it and the interface lag behind.
+			f, _ = e.n.Probe(ctx, []string{"wg-lab"})
+			if i := f.Ifaces["wg-lab"]; i.PubKey != pub || i.ConfPub != old || !i.StaleKey() {
+				t.Errorf("after rotating: %+v", i)
+			}
+			if _, err := e.n.Write(ctx, Write{Iface: "wg-lab", Config: rendered(false), Mode: wgconf.Live}); err != nil {
+				t.Fatal(err)
+			}
+			f, _ = e.n.Probe(ctx, []string{"wg-lab"})
+			if i := f.Ifaces["wg-lab"]; i.StaleKey() {
+				t.Errorf("after writing: %+v", i)
+			}
+		})
+	}
+}

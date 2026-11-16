@@ -29,6 +29,12 @@ syncconf) cp "$3" "$STUB/synced.$2" ;;
 show)
 	if [ "$2" = all ]; then cat "$STUB/listen" 2>/dev/null; exit 0; fi
 	if [ "$2" = interfaces ]; then ls "$STUB/up" 2>/dev/null | tr '\n' ' '; echo; exit 0; fi
+	if [ "$3" = public-key ]; then
+		# The running key: the dump's if there is one, else the config's.
+		if [ -e "$STUB/dump.$2" ]; then head -n 1 "$STUB/dump.$2" | cut -f 2; exit 0; fi
+		sed -n 's/^PrivateKey = priv/pub0/p' "$STUB_WGDIR/$2.conf"
+		exit 0
+	fi
 	if [ -e "$STUB/dump.$2" ]; then cat "$STUB/dump.$2"; exit 0; fi
 	# Build a dump from the config; every peer was last seen at $STUB/handshake.
 	hs=$(cat "$STUB/handshake" 2>/dev/null || echo 0)

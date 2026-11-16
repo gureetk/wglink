@@ -53,8 +53,17 @@ const (
 type Iface struct {
 	Conf   ConfState
 	Config []byte // public form: no private key, preshared keys masked
-	PubKey string
+	PubKey string // from the key file
 	Up     bool
+	// The public keys of the private key in the config file and of the
+	// running interface; either can lag behind the key file.
+	ConfPub, LivePub string
+}
+
+// StaleKey reports whether the config file or the running interface still
+// uses an older key than the key file.
+func (i *Iface) StaleKey() bool {
+	return i.PubKey != "" && (i.ConfPub != "" && i.ConfPub != i.PubKey || i.Up && i.LivePub != "" && i.LivePub != i.PubKey)
 }
 
 // Probe gathers facts, including details for the given interfaces.
@@ -112,6 +121,14 @@ func parseProbe(out []byte) (*Facts, error) {
 		case "up":
 			if cur != nil {
 				cur.Up = true
+			}
+		case "confpub":
+			if cur != nil {
+				cur.ConfPub = d.arg
+			}
+		case "livepub":
+			if cur != nil {
+				cur.LivePub = d.arg
 			}
 		case "section":
 			switch d.arg {

@@ -122,6 +122,24 @@ func TestMesh(t *testing.T) {
 		}
 	})
 
+	t.Run("rotating keys keeps traffic flowing", func(t *testing.T) {
+		l := l.in(t)
+		before := map[string]string{}
+		for _, name := range members {
+			before[name] = l.nodeFile(name, "wg-lab.key")
+		}
+		l.wglink("rotate", "lab", "--yes")
+		for _, name := range members {
+			if l.nodeFile(name, "wg-lab.key") == before[name] {
+				t.Errorf("%s kept its old key", name)
+			}
+		}
+		l.pingAll(members, addrs)
+		if plan := l.wglink("plan"); !strings.Contains(plan, "Everything is up to date.") {
+			t.Errorf("plan after rotating:\n%s", plan)
+		}
+	})
+
 	t.Run("status on a node needs no inventory", func(t *testing.T) {
 		l := l.in(t)
 		out := l.mustOn("alpha", bin, "status", "--local", "--exit-code")
