@@ -518,10 +518,10 @@ func (s *Session) checkNodes(p *Plan, members map[string]bool) {
 		}
 		n := s.Inv.Nodes[name]
 		if !f.Have["wg"] || !f.Have["wg-quick"] {
-			p.problem("%s: wireguard-tools is not installed (%s)", name, installHint(f.OS, "wireguard-tools"))
+			p.problem("%s: wireguard-tools is not installed (%s)", name, InstallHint(f.OS, "wireguard-tools"))
 		}
 		if !f.Have["ip"] {
-			p.problem("%s: iproute2 is not installed (%s)", name, installHint(f.OS, "iproute2"))
+			p.problem("%s: iproute2 is not installed (%s)", name, InstallHint(f.OS, "iproute2"))
 		}
 		if f.UID != 0 {
 			p.problem("%s: wglink needs root there; connect as root or set sudo: true", name)
@@ -535,7 +535,8 @@ func (s *Session) checkNodes(p *Plan, members map[string]bool) {
 	}
 }
 
-func installHint(osID, pkg string) string {
+// InstallHint is the command that installs pkg on the given OS ID.
+func InstallHint(osID, pkg string) string {
 	switch osID {
 	case "debian", "ubuntu", "raspbian", "linuxmint", "pop":
 		return "apt install " + pkg
