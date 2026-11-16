@@ -27,15 +27,16 @@ func (a *app) newNodeAddCmd() *cobra.Command {
 	var f struct {
 		ssh, exec, via, endpoint, service string
 		local, sudo, noCheck              bool
-		pct, keepalive                    int
+		pct, qm, keepalive                int
 	}
 	cmd := &cobra.Command{
-		Use:   "add NAME (--ssh DEST | --local | --exec CMD | --pct VMID --via HOST)",
+		Use:   "add NAME (--ssh DEST | --local | --exec CMD | --pct VMID --via HOST | --qm VMID --via HOST)",
 		Short: "Add a machine wglink can reach",
 		Example: `  wglink node add pve1 --ssh root@192.168.1.10
   wglink node add nas --ssh admin@nas.lan --sudo
   wglink node add pi --ssh pi-garage                 # a Host in ~/.ssh/config
   wglink node add ct101 --pct 101 --via pve1 --endpoint 192.168.1.101
+  wglink node add vm200 --qm 200 --via pve1 --endpoint 192.168.1.200
   wglink node add web --exec "docker exec -i web" --endpoint 172.17.0.2
   wglink node add laptop --local --endpoint 192.168.1.50`,
 		Args: exactArgs(1, "a node name"),
@@ -59,13 +60,20 @@ func (a *app) newNodeAddCmd() *cobra.Command {
 				fields = append(fields, config.Field{Key: "local", Value: true})
 			case f.exec != "":
 				fields = append(fields, config.Field{Key: "exec", Value: config.Flow{V: strings.Fields(f.exec)}})
-			case f.pct != 0:
-				if f.via == "" {
-					return errors.New("--pct needs --via, the Proxmox host's node name")
+			case f.pct != 0 || f.qm != 0:
+				kind, vmid := "pct", f.pct
+				if f.qm != 0 {
+					kind, vmid = "qm", f.qm
 				}
-				fields = append(fields, config.Field{Key: "pct", Value: config.Flow{V: map[string]any{"via": f.via, "vmid": f.pct}}})
+				if f.via == "" {
+					return fmt.Errorf("--%s needs --via, the Proxmox host's node name", kind)
+				}
+				fields = append(fields, config.Field{Key: kind, Value: config.Flow{V: map[string]any{"via": f.via, "vmid": vmid}}})
 			default:
-				return errors.New("say how to reach it: --ssh, --local, --exec or --pct")
+				return errors.New("say how to reach it: --ssh, --local, --exec, --pct or --qm")
+			}
+			if f.via != "" && f.pct == 0 && f.qm == 0 {
+				return errors.New("--via goes with --pct or --qm")
 			}
 			if f.sudo {
 				fields = append(fields, config.Field{Key: "sudo", Value: true})
@@ -97,14 +105,15 @@ func (a *app) newNodeAddCmd() *cobra.Command {
 	fl.StringVar(&f.ssh, "ssh", "", "reach it over SSH: user@host, ssh://user@host:port or a ~/.ssh/config alias")
 	fl.BoolVar(&f.local, "local", false, "it is the machine wglink runs on")
 	fl.StringVar(&f.exec, "exec", "", `reach it through a local command, e.g. "docker exec -i web"`)
-	fl.IntVar(&f.pct, "pct", 0, "a Proxmox container ID, reached through --via")
-	fl.StringVar(&f.via, "via", "", "the Proxmox host node for --pct")
+	fl.IntVar(&f.pct, "pct", 0, "a Proxmox container ID, reached with pct exec through --via")
+	fl.IntVar(&f.qm, "qm", 0, "a Proxmox VM ID, reached with its QEMU guest agent through --via")
+	fl.StringVar(&f.via, "via", "", "the Proxmox host node for --pct or --qm")
 	fl.BoolVar(&f.sudo, "sudo", false, "become root with sudo -n (ssh and local)")
 	fl.StringVar(&f.endpoint, "endpoint", "", `address peers dial: host, host:port or "none" (default for ssh: the ssh host)`)
 	fl.IntVar(&f.keepalive, "keepalive", 0, "send keepalives every N seconds (for nodes behind NAT)")
 	fl.StringVar(&f.service, "service", "", "how tunnels start at boot: auto, systemd or none")
 	fl.BoolVar(&f.noCheck, "no-check", false, "don't connect to check the node")
-	cmd.MarkFlagsMutuallyExclusive("ssh", "local", "exec", "pct")
+	cmd.MarkFlagsMutuallyExclusive("ssh", "local", "exec", "pct", "qm")
 	return cmd
 }
 
@@ -183,6 +192,8 @@ func reach(n *config.Node) string {
 		s = "exec " + strings.Join(n.Exec, " ")
 	case config.ReachPCT:
 		s = fmt.Sprintf("pct %d via %s", n.PCT.VMID, n.PCT.Via)
+	case config.ReachQM:
+		s = fmt.Sprintf("qm %d via %s", n.QM.VMID, n.QM.Via)
 	}
 	if n.Sudo {
 		s += " (sudo)"
@@ -210,7 +221,7 @@ reach it to clean up.`,
 				return err
 			}
 			for _, other := range i.inv.NodeNames() {
-				if n := i.inv.Nodes[other]; n.PCT != nil && n.PCT.Via == name {
+				if n := i.inv.Nodes[other]; n.PCT != nil && n.PCT.Via == name || n.QM != nil && n.QM.Via == name {
 					return fmt.Errorf("%s is reached through %s; remove %s first", other, name, other)
 				}
 			}

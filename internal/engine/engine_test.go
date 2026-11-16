@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/gureetk/wglink/internal/config"
 	"github.com/gureetk/wglink/internal/node"
@@ -432,5 +433,37 @@ func TestUsedSkipsOwnInterfaces(t *testing.T) {
 	f.Ifaces = map[string]*node.Iface{"wg-lab": {Up: true, Config: wgconf.Render(wgconf.Interface{Network: "lab", ListenPort: 51820})}}
 	if _, ports := used(f, map[string]bool{"wg-lab": true}); fmt.Sprint(ports) != "[53 51830]" {
 		t.Errorf("ports with wg reporting 0 = %v", ports)
+	}
+}
+
+func TestRunnersForEachReach(t *testing.T) {
+	t.Setenv("XDG_RUNTIME_DIR", t.TempDir())
+	inv, err := config.Parse("wglink.yaml", []byte(`version: 1
+nodes:
+  pve1: {ssh: root@192.168.1.10}
+  ct101: {pct: {via: pve1, vmid: 101}, endpoint: none}
+  vm200: {qm: {via: pve1, vmid: 200}, endpoint: none}
+  web: {exec: [docker, exec, -i, web], endpoint: none}
+  here: {local: true, sudo: true, endpoint: none}
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := New(t.TempDir(), inv, state.New())
+	s.Timeout = 45 * time.Second
+	for name, want := range map[string]string{
+		"pve1":  "ssh root@192.168.1.10",
+		"ct101": "pct 101 on ssh root@192.168.1.10",
+		"vm200": "qm 200 on ssh root@192.168.1.10",
+		"web":   "exec docker exec -i web",
+		"here":  "local",
+	} {
+		r, err := s.Runner(name)
+		if err != nil || r.String() != want {
+			t.Errorf("%s: %v, %v; want %s", name, r, err, want)
+		}
+	}
+	if r, _ := s.Runner("vm200"); r.(runner.QM).Timeout != 45*time.Second {
+		t.Errorf("vm200's agent timeout = %v", r.(runner.QM).Timeout)
 	}
 }

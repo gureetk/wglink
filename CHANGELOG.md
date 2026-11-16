@@ -4,6 +4,13 @@ Notable changes to wglink. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- Proxmox VMs as nodes, through the QEMU guest agent: `wglink node add vm200
+  --qm 200 --via pve1`. The VM needs `qemu-guest-agent` and no SSH.
+
 ## [0.1.0] - 2026-11-16
 
 The first release: describe machines and networks, preview, apply, and check

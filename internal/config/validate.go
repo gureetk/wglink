@@ -71,7 +71,7 @@ func (inv *Inventory) validateNode(n *Node, isMember bool) []error {
 	}
 	switch n.Reach() {
 	case "":
-		add("set exactly one of ssh, local, exec or pct")
+		add("set exactly one of ssh, local, exec, pct or qm")
 	case ReachSSH:
 		if err := checkSSHDest(n.SSH); err != nil {
 			add("ssh: %v", err)
@@ -82,6 +82,8 @@ func (inv *Inventory) validateNode(n *Node, isMember bool) []error {
 		}
 	case ReachPCT:
 		errs = append(errs, inv.checkGuest(n, "pct", n.PCT)...)
+	case ReachQM:
+		errs = append(errs, inv.checkGuest(n, "qm", n.QM)...)
 	}
 	if n.Sudo && n.Reach() != ReachSSH && n.Reach() != ReachLocal {
 		add("sudo only applies to ssh and local nodes")

@@ -69,12 +69,16 @@ func TestNodeCommands(t *testing.T) {
 	dir := newInventory(t)
 	wg(t, dir, "node", "add", "web", "--exec", "docker exec -i web", "--endpoint", "none", "--no-check")
 	wg(t, dir, "node", "add", "laptop", "--local", "--endpoint", "192.168.1.50", "--keepalive", "25", "--service", "none", "--no-check")
+	wg(t, dir, "node", "add", "vm200", "--qm", "200", "--via", "pve1", "--endpoint", "192.168.1.200", "--no-check")
 	inv := load(t, dir)
 	if n := inv.Nodes["nas"]; n.SSH != "admin@nas.lan" || !n.Sudo || n.Endpoint.Host != "192.168.1.20" {
 		t.Errorf("nas = %+v", n)
 	}
 	if n := inv.Nodes["ct101"]; n.PCT == nil || n.PCT.Via != "pve1" || n.PCT.VMID != 101 {
 		t.Errorf("ct101 = %+v", n)
+	}
+	if n := inv.Nodes["vm200"]; n.QM == nil || n.QM.Via != "pve1" || n.QM.VMID != 200 {
+		t.Errorf("vm200 = %+v", n)
 	}
 	if n := inv.Nodes["web"]; strings.Join(n.Exec, " ") != "docker exec -i web" || !n.Endpoint.None {
 		t.Errorf("web = %+v", n)
@@ -84,7 +88,7 @@ func TestNodeCommands(t *testing.T) {
 	}
 
 	list := wg(t, dir, "node", "list")
-	for _, want := range []string{"NAME", "ct101    pct 101 via pve1", "ssh admin@nas.lan (sudo)", "exec docker exec -i web", "ssh host"} {
+	for _, want := range []string{"NAME", "ct101    pct 101 via pve1", "vm200    qm 200 via pve1", "ssh admin@nas.lan (sudo)", "exec docker exec -i web", "ssh host"} {
 		if !strings.Contains(list, want) {
 			t.Errorf("node list lacks %q:\n%s", want, list)
 		}
@@ -94,13 +98,17 @@ func TestNodeCommands(t *testing.T) {
 	wgErr(t, dir, "use lowercase", "node", "add", "Bad_Name", "--local", "--no-check")
 	wgErr(t, dir, "say how to reach it", "node", "add", "x", "--no-check")
 	wgErr(t, dir, "--pct needs --via", "node", "add", "x", "--pct", "102", "--no-check")
+	wgErr(t, dir, "--qm needs --via", "node", "add", "x", "--qm", "102", "--no-check")
+	wgErr(t, dir, "--via goes with --pct or --qm", "node", "add", "x", "--ssh", "x", "--via", "pve1", "--no-check")
 	wgErr(t, dir, "none of the others can be", "node", "add", "x", "--ssh", "a", "--local", "--no-check")
 	wgErr(t, dir, "must not start with -", "node", "add", "x", "--ssh", "-oProxyCommand=evil", "--no-check")
 	if _, ok := load(t, dir).Nodes["x"]; ok {
 		t.Error("an invalid node reached wglink.yaml")
 	}
 
-	wgErr(t, dir, "ct101 is reached through pve1", "node", "rm", "pve1")
+	wgErr(t, dir, "is reached through pve1", "node", "rm", "pve1")
+	wg(t, dir, "node", "rm", "ct101")
+	wgErr(t, dir, "vm200 is reached through pve1", "node", "rm", "pve1")
 	wg(t, dir, "connect", "nas", "laptop")
 	wgErr(t, dir, "use --force", "node", "rm", "nas")
 	wg(t, dir, "node", "rm", "nas", "--force")

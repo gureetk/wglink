@@ -9,10 +9,10 @@ machines in `wglink.yaml`, preview the change with `wglink plan`, make it
 with `wglink apply`, and check each tunnel with `wglink status`.
 
 wglink is one static binary with no agent, no coordination server and no
-account. It reaches machines the way you already do (SSH, local commands,
-`docker exec`, Proxmox `pct`), and leaves behind ordinary `wg-quick` configs
-that keep working without it. Private keys are made on the machines that use
-them and never leave.
+account. It reaches machines the way you already do: SSH, local commands,
+`docker exec`, and Proxmox containers and VMs. What it leaves behind are
+ordinary `wg-quick` configs that keep working without it. Private keys are
+made on the machines that use them and never leave.
 
 ```sh
 wglink connect pve1 nas pi --name lab
@@ -160,6 +160,7 @@ Run "wglink apply" to make these changes.
 | Local | `--local` | The machine wglink runs on. |
 | Exec | `--exec "docker exec -i web"` | Any command that runs `sh -s` with stdin attached. |
 | Proxmox container | `--pct 101 --via pve1` | Runs `pct exec` on the Proxmox host node `pve1`. |
+| Proxmox VM | `--qm 200 --via pve1` | Runs commands through the QEMU guest agent (`qm guest exec`), so the VM needs `qemu-guest-agent` and no SSH. |
 
 Add `--sudo` to SSH and local nodes to use `sudo -n` when the login isn't
 root. wglink never asks for or stores a password.
@@ -334,14 +335,13 @@ CI runs them on every pull request, with the runner itself as a systemd node.
 | `internal/ipam` | subnet, port and address selection |
 | `internal/engine` | plan, apply and status |
 | `internal/node` | the embedded scripts and their parsers |
-| `internal/runner` | local, SSH, exec and `pct` transports |
+| `internal/runner` | local, SSH, exec, `pct` and guest agent transports |
 | `internal/wgconf` | rendering, parsing and comparing `wg-quick` configs |
 | `internal/state` | `wglink.state.json` |
 
 ## Roadmap
 
 - **0.2:**
-  - Proxmox VMs through the QEMU guest agent.
   - Manual peers such as phones, with `wglink export` for their configs.
   - `apply` that reverts by itself if it cuts off access.
   - `wglink discover` to add Proxmox guests.
