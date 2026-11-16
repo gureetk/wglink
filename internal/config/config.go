@@ -49,6 +49,7 @@ type Node struct {
 	Local bool      `yaml:"local"`
 	Exec  []string  `yaml:"exec"`
 	PCT   *GuestRef `yaml:"pct"`
+	QM    *GuestRef `yaml:"qm"`
 
 	Sudo      bool      `yaml:"sudo"`
 	Endpoint  *Endpoint `yaml:"endpoint"`
@@ -70,6 +71,7 @@ const (
 	ReachLocal Reach = "local"
 	ReachExec  Reach = "exec"
 	ReachPCT   Reach = "pct"
+	ReachQM    Reach = "qm"
 )
 
 // Reach returns the node's reach method, or "" if none or several are set.
@@ -86,6 +88,9 @@ func (n *Node) Reach() Reach {
 	}
 	if n.PCT != nil {
 		set = append(set, ReachPCT)
+	}
+	if n.QM != nil {
+		set = append(set, ReachQM)
 	}
 	if len(set) != 1 {
 		return ""
@@ -338,7 +343,7 @@ func loadError(name string, err error) error {
 var fields = map[string][]string{
 	"inventory": {"version", "defaults", "nodes", "networks"},
 	"defaults":  {"pool", "prefix", "port"},
-	"node":      {"ssh", "local", "exec", "pct", "sudo", "endpoint", "keepalive", "service"},
+	"node":      {"ssh", "local", "exec", "pct", "qm", "sudo", "endpoint", "keepalive", "service"},
 	"guestref":  {"via", "vmid"},
 	"network":   {"subnet", "port", "iface", "mtu", "keepalive", "members"},
 	"member":    {"ip"},

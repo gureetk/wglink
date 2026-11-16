@@ -112,6 +112,12 @@ func (s *Session) build(n *config.Node) (runner.Runner, error) {
 			return nil, err
 		}
 		return runner.PCT(host, n.PCT.VMID), nil
+	case config.ReachQM:
+		host, err := s.runnerLocked(n.QM.Via)
+		if err != nil {
+			return nil, err
+		}
+		return runner.QM{Host: host, VMID: n.QM.VMID, Timeout: s.Timeout}, nil
 	}
 	return nil, fmt.Errorf("node %s has no reach method", n.Name)
 }
