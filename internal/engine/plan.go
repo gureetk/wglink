@@ -35,6 +35,7 @@ type Options struct {
 	Nodes    []string // only change these nodes; all when empty
 	Adopt    bool     // replace configs wglink didn't write
 	NoRevert bool     // don't arm the timer that undoes a change cutting off an SSH node
+	Rotate   []string // replace these nodes' keys
 }
 
 // Plan is the difference between wglink.yaml and the nodes.
@@ -66,6 +67,7 @@ type MemberPlan struct {
 	Action  Action
 	Reasons []string
 	NewKey  bool // apply creates the node's key first
+	Rotate  bool // the new key replaces one it has
 	Drift   bool // the node's config changed since the last apply
 }
 
@@ -137,6 +139,21 @@ func (s *Session) Plan(ctx context.Context, opts Options) (*Plan, error) {
 	for _, name := range opts.Nodes {
 		if _, ok := s.Inv.Nodes[name]; !ok {
 			return nil, fmt.Errorf("no node named %s", name)
+		}
+	}
+	for _, name := range opts.Rotate {
+		if s.manual(name) {
+			return nil, fmt.Errorf("%s is a manual node; give it a new key with wglink export --new-key", name)
+		}
+		member := false
+		for _, n := range scoped {
+			if net, ok := s.Inv.Networks[n]; ok {
+				_, in := net.Member(name)
+				member = member || in
+			}
+		}
+		if !member {
+			return nil, fmt.Errorf("%s isn't in %s", name, strings.Join(scoped, ", "))
 		}
 	}
 
@@ -287,6 +304,8 @@ func (s *Session) manual(name string) bool {
 	return ok && n.Manual != nil
 }
 
+func (p *Plan) rotating(name string) bool { return slices.Contains(p.opts.Rotate, name) }
+
 // willKey reports whether this run can create a key on the node.
 func (p *Plan) willKey(name string) bool { return p.facts[name] != nil && p.inNodeScope(name) }
 
@@ -408,6 +427,9 @@ func (s *Session) planNetwork(ctx context.Context, p *Plan, n *config.Network) *
 		} else if sn != nil && sn.Members[m.Name] != nil {
 			key = sn.Members[m.Name].PubKey
 		}
+		if p.rotating(m.Name) {
+			key = "" // peers wait for the new one
+		}
 		p.keys[n.Name][m.Name] = key
 	}
 	if len(n.Members) < 2 {
@@ -442,6 +464,7 @@ func (s *Session) planNetwork(ctx context.Context, p *Plan, n *config.Network) *
 			continue
 		}
 		mp.NewKey = p.keys[n.Name][m.Name] == ""
+		mp.Rotate = p.rotating(m.Name)
 		want := s.desired(ctx, p, n, m.Name)
 		iface := f.Ifaces[np.Iface]
 		if iface == nil {
@@ -459,11 +482,19 @@ func (s *Session) planNetwork(ctx context.Context, p *Plan, n *config.Network) *
 		case node.ConfManaged:
 			s.compare(mp, iface, want, sn)
 		}
-		if mp.NewKey {
+		switch {
+		case mp.Rotate:
+			mp.Reasons = append(mp.Reasons, "rotate its key")
+		case mp.NewKey:
 			mp.Reasons = append(mp.Reasons, "new key")
-			if mp.Action == Keep {
-				mp.Action = Live
-			}
+		case iface.StaleKey():
+			// Its key file changed, but the config or the interface still has the old key.
+			mp.Reasons = append(mp.Reasons, "load its new key")
+		default:
+			continue
+		}
+		if mp.Action == Keep {
+			mp.Action = Live
 		}
 	}
 	return np

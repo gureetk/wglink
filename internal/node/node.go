@@ -96,10 +96,21 @@ func checkIfaces(ifaces []string) error {
 
 // EnsureKey creates the interface's private key if missing and returns the public key.
 func (n Node) EnsureKey(ctx context.Context, iface string) (pub string, created bool, err error) {
+	return n.key(ctx, iface, false)
+}
+
+// RotateKey replaces the interface's private key and returns the new public
+// key. The interface keeps the old one until its config is written again.
+func (n Node) RotateKey(ctx context.Context, iface string) (string, error) {
+	pub, _, err := n.key(ctx, iface, true)
+	return pub, err
+}
+
+func (n Node) key(ctx context.Context, iface string, rotate bool) (pub string, created bool, err error) {
 	if err := checkIfaces([]string{iface}); err != nil {
 		return "", false, err
 	}
-	out, err := n.run(ctx, "key", map[string]string{"WG_IFACE": iface})
+	out, err := n.run(ctx, "key", map[string]string{"WG_IFACE": iface, "WG_ROTATE": map[bool]string{true: "1", false: "0"}[rotate]})
 	if err != nil {
 		return "", false, err
 	}

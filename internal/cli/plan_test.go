@@ -123,3 +123,24 @@ func TestApplyScope(t *testing.T) {
 		t.Errorf("unreachable pi: %v\n%s", err, out)
 	}
 }
+
+func TestRotateCommand(t *testing.T) {
+	dir, _ := fakeLab(t)
+	wg(t, dir, "connect", "pve1", "nas", "pi", "--name", "lab")
+	wg(t, dir, "apply", "--yes")
+
+	out := wg(t, dir, "rotate", "lab", "nas", "--yes")
+	if !strings.Contains(out, "nas: made a new key for wg-lab") || strings.Contains(out, "pve1: made a new key") || !strings.Contains(out, "Done.") {
+		t.Errorf("rotate nas:\n%s", out)
+	}
+	out = wg(t, dir, "rotate", "lab", "--yes")
+	for _, n := range []string{"pve1", "nas", "pi"} {
+		if !strings.Contains(out, n+": made a new key for wg-lab") {
+			t.Errorf("rotate lab didn't rotate %s:\n%s", n, out)
+		}
+	}
+	if out := wg(t, dir, "plan"); !strings.Contains(out, "Everything is up to date.") {
+		t.Errorf("plan after rotating:\n%s", out)
+	}
+	wgErr(t, dir, "no network named ghost", "rotate", "ghost", "--yes")
+}

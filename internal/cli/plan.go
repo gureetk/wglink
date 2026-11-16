@@ -90,46 +90,87 @@ node; --no-revert turns it off.`,
 		GroupID: "run",
 		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			s, err := a.session()
-			if err != nil {
-				return err
-			}
-			p, err := s.Plan(cmd.Context(), engine.Options{Networks: sc.nets, Nodes: sc.nodes, Adopt: adopt, NoRevert: noRevert})
-			if err != nil {
-				return err
-			}
-			out := cmd.OutOrStdout()
-			st := style(out)
-			engine.WritePlan(out, p, st)
-			if len(p.Problems) > 0 {
-				return &exitCode{1}
-			}
-			if p.Empty() {
-				return nil
-			}
-			if !yes {
-				ok, err := confirm(cmd.InOrStdin(), out, "Apply these changes?")
-				if err != nil {
-					return err
-				}
-				if !ok {
-					fmt.Fprintln(out, "Nothing changed.")
-					return nil
-				}
-			}
-			fmt.Fprintln(out)
-			err = s.Apply(cmd.Context(), p, func(format string, args ...any) {
-				fmt.Fprintf(out, "  %s\n", fmt.Sprintf(format, args...))
-			})
-			if err != nil {
-				return err
-			}
-			fmt.Fprintln(out, st.Green("Done."))
-			return nil
+			return a.apply(cmd, engine.Options{Networks: sc.nets, Nodes: sc.nodes, Adopt: adopt, NoRevert: noRevert}, yes)
 		},
 	}
 	sc.add(cmd)
 	cmd.Flags().BoolVar(&adopt, "adopt", false, "replace configs wglink didn't write")
+	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "don't ask for confirmation")
+	cmd.Flags().BoolVar(&noRevert, "no-revert", false, "don't have SSH nodes undo a change that wglink can't confirm")
+	return cmd
+}
+
+// apply shows the plan, asks unless yes, and makes the changes.
+func (a *app) apply(cmd *cobra.Command, opts engine.Options, yes bool) error {
+	s, err := a.session()
+	if err != nil {
+		return err
+	}
+	p, err := s.Plan(cmd.Context(), opts)
+	if err != nil {
+		return err
+	}
+	out := cmd.OutOrStdout()
+	st := style(out)
+	engine.WritePlan(out, p, st)
+	if len(p.Problems) > 0 {
+		return &exitCode{1}
+	}
+	if p.Empty() {
+		return nil
+	}
+	if !yes {
+		ok, err := confirm(cmd.InOrStdin(), out, "Apply these changes?")
+		if err != nil {
+			return err
+		}
+		if !ok {
+			fmt.Fprintln(out, "Nothing changed.")
+			return nil
+		}
+	}
+	fmt.Fprintln(out)
+	err = s.Apply(cmd.Context(), p, func(format string, args ...any) {
+		fmt.Fprintf(out, "  %s\n", fmt.Sprintf(format, args...))
+	})
+	if err != nil {
+		return err
+	}
+	fmt.Fprintln(out, st.Green("Done."))
+	return nil
+}
+
+func (a *app) newRotateCmd() *cobra.Command {
+	var yes, noRevert bool
+	cmd := &cobra.Command{
+		Use:   "rotate NETWORK [NODE...]",
+		Short: "Replace members' keys",
+		Long: `Make new keys for some or all of a network's members, on the members
+themselves, and give the new public keys to their peers. Each member loads its
+new key live. Manual nodes get new keys with "wglink export --new-key".`,
+		Example: `  wglink rotate lab            # every member that wglink reaches
+  wglink rotate lab nas`,
+		GroupID: "run",
+		Args:    cobra.MinimumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			network, nodes := args[0], args[1:]
+			if len(nodes) == 0 {
+				i, err := a.open()
+				if err != nil {
+					return err
+				}
+				if err := i.needNetwork(network); err != nil {
+					return err
+				}
+				for _, m := range i.inv.Networks[network].Members {
+					if i.inv.Nodes[m.Name].Manual == nil {
+						nodes = append(nodes, m.Name)
+					}
+				}
+			}
+			return a.apply(cmd, engine.Options{Networks: []string{network}, Rotate: nodes, NoRevert: noRevert}, yes)
+		},
+	}
 	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "don't ask for confirmation")
 	cmd.Flags().BoolVar(&noRevert, "no-revert", false, "don't have SSH nodes undo a change that wglink can't confirm")
 	return cmd

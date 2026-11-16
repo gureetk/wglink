@@ -51,6 +51,19 @@ probe_iface() {
 	fi
 	if [ -s "$WG_DIR/$1.key" ] && have wg; then
 		out "@pub $(wg pubkey <"$WG_DIR/$1.key")"
+		# Which key the config file and the running interface use, so a key
+		# that changed but wasn't loaded shows up.
+		if [ -f "$conf" ] && pub=$(conf_key "$conf" | wg pubkey 2>/dev/null); then
+			out "@confpub $pub"
+		fi
 	fi
-	if have ip && is_up "$1"; then out "@up"; fi
+	if have ip && is_up "$1"; then
+		out "@up"
+		if have wg && pub=$(wg show "$1" public-key 2>/dev/null); then out "@livepub $pub"; fi
+	fi
+}
+
+# conf_key prints the private key in a config, which stays on this node.
+conf_key() {
+	sed -n 's/^[[:blank:]]*[Pp][Rr][Ii][Vv][Aa][Tt][Ee][Kk][Ee][Yy][[:blank:]]*=[[:blank:]]*//p' "$1" | head -n 1
 }

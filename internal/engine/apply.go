@@ -55,7 +55,11 @@ func (s *Session) Apply(ctx context.Context, p *Plan, logf Logf) error {
 			}
 			var pub string
 			err = s.timed(ctx, func(ctx context.Context) (err error) {
-				pub, _, err = nd.EnsureKey(ctx, np.Iface)
+				if mp.Rotate {
+					pub, err = nd.RotateKey(ctx, np.Iface)
+				} else {
+					pub, _, err = nd.EnsureKey(ctx, np.Iface)
+				}
 				return err
 			})
 			if err != nil {
@@ -66,7 +70,11 @@ func (s *Session) Apply(ctx context.Context, p *Plan, logf Logf) error {
 			if err := s.SaveState(); err != nil {
 				return err
 			}
-			logf("%s: created a key for %s", mp.Node, np.Iface)
+			if mp.Rotate {
+				logf("%s: made a new key for %s", mp.Node, np.Iface)
+			} else {
+				logf("%s: created a key for %s", mp.Node, np.Iface)
+			}
 		}
 	}
 
