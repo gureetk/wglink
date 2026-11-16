@@ -233,3 +233,20 @@ func TestSaveRejectsInvalid(t *testing.T) {
 		t.Errorf("saved inventory does not load: %v", err)
 	}
 }
+
+func TestSetNodeFieldsKeepsTheRest(t *testing.T) {
+	d, err := ParseDoc([]byte("version: 1\nnodes:\n  phone:\n    manual: {}\n    endpoint: none # behind NAT\n    keepalive: 25\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := d.SetNodeFields("phone", Field{"manual", Flow{map[string]any{"pubkey": "K"}}}); err != nil {
+		t.Fatal(err)
+	}
+	want := "version: 1\n\nnodes:\n  phone:\n    manual: {pubkey: K}\n    endpoint: none # behind NAT\n    keepalive: 25\n"
+	if got := render(t, d); got != want {
+		t.Errorf("got:\n%s\nwant:\n%s", got, want)
+	}
+	if err := d.SetNodeFields("ghost", Field{"sudo", true}); err == nil {
+		t.Error("changed a node that doesn't exist")
+	}
+}

@@ -6,6 +6,8 @@ import (
 	"net/netip"
 	"regexp"
 	"strings"
+
+	"github.com/gureetk/wglink/internal/wgconf"
 )
 
 var (
@@ -71,7 +73,7 @@ func (inv *Inventory) validateNode(n *Node, isMember bool) []error {
 	}
 	switch n.Reach() {
 	case "":
-		add("set exactly one of ssh, local, exec, pct or qm")
+		add("set exactly one of ssh, local, exec, pct, qm or manual")
 	case ReachSSH:
 		if err := checkSSHDest(n.SSH); err != nil {
 			add("ssh: %v", err)
@@ -84,6 +86,10 @@ func (inv *Inventory) validateNode(n *Node, isMember bool) []error {
 		errs = append(errs, inv.checkGuest(n, "pct", n.PCT)...)
 	case ReachQM:
 		errs = append(errs, inv.checkGuest(n, "qm", n.QM)...)
+	case ReachManual:
+		if k := n.Manual.PubKey; k != "" && !wgconf.ValidKey(k) {
+			add("manual.pubkey: %q isn't a WireGuard public key", k)
+		}
 	}
 	if n.Sudo && n.Reach() != ReachSSH && n.Reach() != ReachLocal {
 		add("sudo only applies to ssh and local nodes")

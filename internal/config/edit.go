@@ -97,6 +97,19 @@ func (d *Doc) SetNode(name string, fields ...Field) error {
 	return nil
 }
 
+// SetNodeFields changes some of an existing node's fields, keeping the rest.
+func (d *Doc) SetNodeFields(name string, fields ...Field) error {
+	m := lookup(d.root(), "nodes")
+	var n *yaml.Node
+	if m != nil {
+		n = lookup(m, name)
+	}
+	if n == nil || n.Kind != yaml.MappingNode {
+		return fmt.Errorf("no node named %s", name)
+	}
+	return setFields(n, fields)
+}
+
 // RemoveNode deletes the node and reports whether it existed.
 func (d *Doc) RemoveNode(name string) bool {
 	m := lookup(d.root(), "nodes")

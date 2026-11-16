@@ -78,7 +78,11 @@ func Summary(p *Plan) string {
 		return "Everything is up to date."
 	}
 	c, l, r, d := p.Changes()
-	return fmt.Sprintf("%d to create, %d to change live, %d to restart, %d to remove.", c, l, r, d)
+	line := fmt.Sprintf("%d to create, %d to change live, %d to restart, %d to remove.", c, l, r, d)
+	if e := p.Exports(); e > 0 {
+		line += fmt.Sprintf(" %d manual %s to export.", e, plural(e, "config", "configs"))
+	}
+	return line
 }
 
 func memberLine(m *MemberPlan) (sym, text string) {
@@ -94,6 +98,8 @@ func memberLine(m *MemberPlan) (sym, text string) {
 		return "~", "start: " + why
 	case Skip:
 		return "?", why
+	case Export:
+		return "!", why
 	}
 	return "=", "up to date"
 }
@@ -106,6 +112,8 @@ func colorSym(st Style, sym string) string {
 		return st.Yellow(sym)
 	case "-":
 		return st.Red(sym)
+	case "!":
+		return st.Yellow(sym)
 	}
 	return st.Dim(sym)
 }
@@ -309,6 +317,8 @@ func memberStatus(st Style, m *MemberReport) string {
 		s = st.Red("down")
 	case MemberNew:
 		s = st.Yellow("not applied yet")
+	case MemberManual:
+		s = st.Dim("manual")
 	case MemberUnreachable:
 		s = st.Red("unreachable")
 	}

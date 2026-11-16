@@ -171,6 +171,27 @@ nothing more. Other nodes need `--endpoint ADDRESS`. A machine behind NAT that
 nobody can dial gets `--endpoint none --keepalive 25`: it dials out to the
 others and keeps the path open.
 
+## Phones and other devices
+
+Some peers are devices wglink can't reach, such as phones, tablets or a
+friend's laptop. Add them as **manual** nodes. wglink gives them an address
+and adds them to every other member's config, and you load their own config
+on the device:
+
+```sh
+wglink node add phone --manual --keepalive 25
+wglink net join lab phone
+wglink export lab phone -o phone.conf    # makes the phone's key pair
+qrencode -t ansiutf8 < phone.conf        # scan it with the WireGuard app
+wglink apply                             # the other members accept the phone
+```
+
+The phone's private key is only in that exported config; wglink keeps just
+the public key. If the device already has a key, pass its public key with
+`--pubkey` instead. When the phone's config changes, for example because a
+member joined or moved, `wglink plan` says so and `wglink export` gives the
+new one.
+
 ## The inventory
 
 The commands above edit `wglink.yaml` for you, keeping its comments and
@@ -284,7 +305,9 @@ between runs, and each is validated and quoted.
   the machine that uses it, stored as `/etc/wireguard/IFACE.key` with mode
   0600, and never printed. The scripts mask keys in everything they report.
   The integration tests check that no private key appears in wglink's
-  output, inventory or state.
+  output, inventory or state. The one exception is a manual node: wglink
+  can't run anything there, so `wglink export` makes its key and writes it
+  into that one config, readable only by you.
 - **No secrets on the controller.** The state file holds public keys,
   addresses and config hashes computed with the secrets removed.
 - **No shell on the controller.** wglink runs commands as argument lists.
@@ -342,7 +365,6 @@ CI runs them on every pull request, with the runner itself as a systemd node.
 ## Roadmap
 
 - **0.2:**
-  - Manual peers such as phones, with `wglink export` for their configs.
   - `apply` that reverts by itself if it cuts off access.
   - `wglink discover` to add Proxmox guests.
   - Rebuilding the state file from the nodes.

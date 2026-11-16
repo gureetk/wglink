@@ -29,6 +29,13 @@ nodes:
   vm200:
     qm: { via: pve1, vmid: 200 }
     endpoint: none
+  phone:
+    manual: { pubkey: yAnz5TF+lXXJte14tji3zlMNq+hd2rYUIgJBgB3fBmk= }
+    endpoint: none
+    keepalive: 25
+  tablet:
+    manual: {}
+    endpoint: none
   web:
     exec: [docker, exec, -i, web]
     endpoint: none
@@ -54,7 +61,7 @@ func TestParseExample(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := strings.Join(inv.NodeNames(), ","); got != "ct101,laptop,nas,pi,pve1,vm200,web" {
+	if got := strings.Join(inv.NodeNames(), ","); got != "ct101,laptop,nas,phone,pi,pve1,tablet,vm200,web" {
 		t.Errorf("nodes = %s", got)
 	}
 	if r := inv.Nodes["ct101"].Reach(); r != ReachPCT {
@@ -62,6 +69,12 @@ func TestParseExample(t *testing.T) {
 	}
 	if n := inv.Nodes["vm200"]; n.Reach() != ReachQM || n.QM.Via != "pve1" || n.QM.VMID != 200 {
 		t.Errorf("vm200 = %+v", n)
+	}
+	if n := inv.Nodes["phone"]; n.Reach() != ReachManual || n.Manual.PubKey != "yAnz5TF+lXXJte14tji3zlMNq+hd2rYUIgJBgB3fBmk=" {
+		t.Errorf("phone = %+v", n)
+	}
+	if n := inv.Nodes["tablet"]; n.Reach() != ReachManual || n.Manual.PubKey != "" {
+		t.Errorf("tablet = %+v", n)
 	}
 	if r := inv.Nodes["web"].Reach(); r != ReachExec {
 		t.Errorf("web reach = %q", r)
@@ -123,7 +136,11 @@ func TestParseErrors(t *testing.T) {
 		{"pct bad vmid", "version: 1\nnodes:\n  h: {ssh: h}\n  c: {pct: {via: h, vmid: 7}}\n", "pct.vmid: 7 must be"},
 		{"pct via pct", "version: 1\nnodes:\n  h: {ssh: h}\n  c: {pct: {via: h, vmid: 101}}\n  d: {pct: {via: c, vmid: 102}}\n", "pct.via: c must be"},
 		{"qm via qm", "version: 1\nnodes:\n  h: {ssh: h}\n  v: {qm: {via: h, vmid: 101}}\n  w: {qm: {via: v, vmid: 102}}\n", "qm.via: v must be"},
-		{"pct and qm", "version: 1\nnodes:\n  h: {ssh: h}\n  v: {qm: {via: h, vmid: 101}, pct: {via: h, vmid: 101}}\n", "set exactly one of ssh, local, exec, pct or qm"},
+		{"pct and qm", "version: 1\nnodes:\n  h: {ssh: h}\n  v: {qm: {via: h, vmid: 101}, pct: {via: h, vmid: 101}}\n", "set exactly one of ssh, local, exec, pct, qm or manual"},
+		{"manual key", "version: 1\nnodes:\n  p: {manual: {pubkey: nope}}\n", `manual.pubkey: "nope" isn't a WireGuard public key`},
+		{"manual typo", "version: 1\nnodes:\n  p:\n    manual: {pubky: x}\n", `unknown field "pubky" in manual (did you mean "pubkey"?)`},
+		{"manual endpoint", "version: 1\nnodes:\n  a: {ssh: a}\n  p: {manual: {}}\nnetworks:\n  n: {members: [a, p]}\n", "node p: endpoint: required for manual nodes"},
+		{"via manual", "version: 1\nnodes:\n  p: {manual: {}}\n  c: {pct: {via: p, vmid: 101}}\n", "pct.via: p must be"},
 		{"sudo exec", "version: 1\nnodes:\n  a: {exec: [x], sudo: true}\n", "sudo only applies"},
 		{"service", "version: 1\nnodes:\n  a: {ssh: a, service: openrc}\n", "service:"},
 		{"endpoint needed", "version: 1\nnodes:\n  a: {ssh: a}\n  b: {local: true}\nnetworks:\n  n: {members: [a, b]}\n", "node b: endpoint: required"},

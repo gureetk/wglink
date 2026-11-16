@@ -38,8 +38,9 @@ type MemberState string
 
 const (
 	MemberUp          MemberState = "up"
-	MemberDown        MemberState = "down" // the interface is down or gone
-	MemberNew         MemberState = "new"  // not applied yet
+	MemberDown        MemberState = "down"   // the interface is down or gone
+	MemberNew         MemberState = "new"    // not applied yet
+	MemberManual      MemberState = "manual" // wglink can't ask it; its peers tell
 	MemberUnreachable MemberState = "unreachable"
 )
 
@@ -109,6 +110,9 @@ func (s *Session) Status(ctx context.Context, opts StatusOptions) (*Report, erro
 	for _, n := range nets {
 		iface := s.liveIface(n)
 		for _, m := range n.Members {
+			if s.manual(m.Name) {
+				continue
+			}
 			ifaces[m.Name] = append(ifaces[m.Name], iface)
 			if opts.NoPing {
 				continue
@@ -167,7 +171,7 @@ func (s *Session) netReport(n *config.Network, got map[string]*node.Status, errs
 	}
 	views := map[string]*view{}
 	for _, m := range n.Members {
-		v := &view{name: m.Name, rec: s.recorded(n.Name, m.Name), err: errs[m.Name]}
+		v := &view{name: m.Name, rec: s.recorded(n.Name, m.Name), err: errs[m.Name], manual: s.manual(m.Name)}
 		if st := got[m.Name]; st != nil {
 			v.now, v.iface, v.pings = st.Now, st.Ifaces[nr.Iface], st.Pings
 		}
@@ -185,16 +189,20 @@ func (s *Session) netReport(n *config.Network, got map[string]*node.Status, errs
 // view is one member's side of a network: what was applied there and what
 // it reports now.
 type view struct {
-	name  string
-	rec   *state.Member // nil until applied
-	err   error         // set if it couldn't be reached
-	now   time.Time     // its clock
-	iface *node.IfaceStatus
-	pings map[node.PingTarget]node.Ping
+	name   string
+	rec    *state.Member // nil until applied
+	err    error         // set if it couldn't be reached
+	manual bool          // wglink can't ask it
+	now    time.Time     // its clock
+	iface  *node.IfaceStatus
+	pings  map[node.PingTarget]node.Ping
 }
 
 func (v *view) applied() bool { return v.rec != nil && v.rec.PubKey != "" }
 func (v *view) up() bool      { return v.err == nil && v.iface != nil && v.iface.Up }
+
+// asked reports whether the node itself reported its state.
+func (v *view) asked() bool { return v.err == nil && !v.manual }
 
 func (v *view) member() *MemberReport {
 	m := &MemberReport{Node: v.name}
@@ -202,6 +210,9 @@ func (v *view) member() *MemberReport {
 		m.Addr = v.rec.IP
 	}
 	switch {
+	case v.manual:
+		m.State = MemberManual
+		return m
 	case v.err != nil:
 		m.State = MemberUnreachable
 	case !v.applied():
@@ -236,18 +247,27 @@ func link(iface string, a, b *view) *Link {
 	l := &Link{A: a.name, B: b.name, Health: Health{Handshake: Never}}
 	ends := []struct{ v, other *view }{{a, b}, {b, a}}
 	for _, e := range ends {
-		if !e.v.applied() {
+		switch {
+		case e.v.applied():
+		case e.v.manual:
+			l.State, l.Note = LinkMissing, e.v.name+" isn't exported yet; run wglink export"
+			return l
+		default:
 			l.State, l.Note = LinkMissing, e.v.name+" isn't set up yet; run wglink apply"
 			return l
 		}
 	}
-	if a.err != nil && b.err != nil {
+	switch {
+	case a.manual && b.manual:
+		l.State, l.Note = LinkUnknown, "both ends are manual nodes"
+		return l
+	case !a.asked() && !b.asked():
 		l.State, l.Note = LinkUnknown, "can't reach either end"
 		return l
 	}
 	seen := map[*view]*node.PeerStatus{}
 	for _, e := range ends {
-		if e.v.err != nil {
+		if !e.v.asked() {
 			continue
 		}
 		if !e.v.up() {

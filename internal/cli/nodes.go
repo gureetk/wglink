@@ -11,6 +11,7 @@ import (
 
 	"github.com/gureetk/wglink/internal/config"
 	"github.com/gureetk/wglink/internal/engine"
+	"github.com/gureetk/wglink/internal/wgconf"
 )
 
 func (a *app) newNodeCmd() *cobra.Command {
@@ -25,20 +26,21 @@ func (a *app) newNodeCmd() *cobra.Command {
 
 func (a *app) newNodeAddCmd() *cobra.Command {
 	var f struct {
-		ssh, exec, via, endpoint, service string
-		local, sudo, noCheck              bool
-		pct, qm, keepalive                int
+		ssh, exec, via, endpoint, service, pubkey string
+		local, manual, sudo, noCheck              bool
+		pct, qm, keepalive                        int
 	}
 	cmd := &cobra.Command{
-		Use:   "add NAME (--ssh DEST | --local | --exec CMD | --pct VMID --via HOST | --qm VMID --via HOST)",
-		Short: "Add a machine wglink can reach",
+		Use:   "add NAME (--ssh DEST | --local | --exec CMD | --pct VMID --via HOST | --qm VMID --via HOST | --manual)",
+		Short: "Add a machine, or a device such as a phone",
 		Example: `  wglink node add pve1 --ssh root@192.168.1.10
   wglink node add nas --ssh admin@nas.lan --sudo
   wglink node add pi --ssh pi-garage                 # a Host in ~/.ssh/config
   wglink node add ct101 --pct 101 --via pve1 --endpoint 192.168.1.101
   wglink node add vm200 --qm 200 --via pve1 --endpoint 192.168.1.200
   wglink node add web --exec "docker exec -i web" --endpoint 172.17.0.2
-  wglink node add laptop --local --endpoint 192.168.1.50`,
+  wglink node add laptop --local --endpoint 192.168.1.50
+  wglink node add phone --manual --keepalive 25     # set up with wglink export`,
 		Args: exactArgs(1, "a node name"),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			name := args[0]
@@ -69,8 +71,23 @@ func (a *app) newNodeAddCmd() *cobra.Command {
 					return fmt.Errorf("--%s needs --via, the Proxmox host's node name", kind)
 				}
 				fields = append(fields, config.Field{Key: kind, Value: config.Flow{V: map[string]any{"via": f.via, "vmid": vmid}}})
+			case f.manual:
+				m := map[string]any{}
+				if f.pubkey != "" {
+					if !wgconf.ValidKey(f.pubkey) {
+						return fmt.Errorf("--pubkey: %q isn't a WireGuard public key", f.pubkey)
+					}
+					m["pubkey"] = f.pubkey
+				}
+				fields = append(fields, config.Field{Key: "manual", Value: config.Flow{V: m}})
+				if f.endpoint == "" {
+					f.endpoint = "none"
+				}
 			default:
-				return errors.New("say how to reach it: --ssh, --local, --exec, --pct or --qm")
+				return errors.New("say how to reach it: --ssh, --local, --exec, --pct, --qm or --manual")
+			}
+			if f.pubkey != "" && !f.manual {
+				return errors.New("--pubkey goes with --manual")
 			}
 			if f.via != "" && f.pct == 0 && f.qm == 0 {
 				return errors.New("--via goes with --pct or --qm")
@@ -95,7 +112,10 @@ func (a *app) newNodeAddCmd() *cobra.Command {
 			}
 			out := cmd.OutOrStdout()
 			fmt.Fprintf(out, "Added node %s.\n", name)
-			if !f.noCheck {
+			switch {
+			case f.manual:
+				fmt.Fprintf(out, "Add it to a network, then run \"wglink export NETWORK %s\" for its config.\n", name)
+			case !f.noCheck:
 				check(cmd, i, name)
 			}
 			return nil
@@ -108,12 +128,14 @@ func (a *app) newNodeAddCmd() *cobra.Command {
 	fl.IntVar(&f.pct, "pct", 0, "a Proxmox container ID, reached with pct exec through --via")
 	fl.IntVar(&f.qm, "qm", 0, "a Proxmox VM ID, reached with its QEMU guest agent through --via")
 	fl.StringVar(&f.via, "via", "", "the Proxmox host node for --pct or --qm")
+	fl.BoolVar(&f.manual, "manual", false, "a device wglink can't reach, such as a phone; its config comes from wglink export")
+	fl.StringVar(&f.pubkey, "pubkey", "", "the public key a --manual device already has (default: made by wglink export)")
 	fl.BoolVar(&f.sudo, "sudo", false, "become root with sudo -n (ssh and local)")
 	fl.StringVar(&f.endpoint, "endpoint", "", `address peers dial: host, host:port or "none" (default for ssh: the ssh host)`)
 	fl.IntVar(&f.keepalive, "keepalive", 0, "send keepalives every N seconds (for nodes behind NAT)")
 	fl.StringVar(&f.service, "service", "", "how tunnels start at boot: auto, systemd or none")
 	fl.BoolVar(&f.noCheck, "no-check", false, "don't connect to check the node")
-	cmd.MarkFlagsMutuallyExclusive("ssh", "local", "exec", "pct", "qm")
+	cmd.MarkFlagsMutuallyExclusive("ssh", "local", "exec", "pct", "qm", "manual")
 	return cmd
 }
 
@@ -194,6 +216,11 @@ func reach(n *config.Node) string {
 		s = fmt.Sprintf("pct %d via %s", n.PCT.VMID, n.PCT.Via)
 	case config.ReachQM:
 		s = fmt.Sprintf("qm %d via %s", n.QM.VMID, n.QM.Via)
+	case config.ReachManual:
+		s = "manual"
+		if n.Manual.PubKey == "" {
+			s += " (no key yet)"
+		}
 	}
 	if n.Sudo {
 		s += " (sudo)"
