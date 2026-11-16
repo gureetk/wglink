@@ -119,6 +119,9 @@ func (s *Session) export(ctx context.Context, network, member string, fresh bool
 	if !sn.Subnet.IsValid() {
 		sn.Iface, sn.Subnet, sn.Port = n.IfaceName(), a.Subnet, a.Port
 	}
+	if !sn.Subnet6.IsValid() {
+		sn.Subnet6 = a.Subnet6
+	}
 	sm := sn.Member(member)
 	sm.IP, sm.PubKey, sm.Applied, sm.PSKs = a.Addrs[member], pub, wgconf.Hash(text), nil
 	if len(given) > 0 {

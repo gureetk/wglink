@@ -11,6 +11,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/gureetk/wglink/internal/atomicfile"
+	"github.com/gureetk/wglink/internal/engine"
 	"github.com/gureetk/wglink/internal/state"
 )
 
@@ -64,7 +65,7 @@ config.`,
 					fmt.Fprintf(out, "%s   %s   not set up on any member\n\n", st.Bold("network "+r.Name), r.Iface)
 					continue
 				}
-				fmt.Fprintf(out, "%s   %s   %s   udp/%d\n", st.Bold("network "+r.Name), r.Iface, r.Subnet, r.Port)
+				fmt.Fprintf(out, "%s   %s   %s   udp/%d\n", st.Bold("network "+r.Name), r.Iface, engine.Subnets(r.Subnet, r.Subnet6), r.Port)
 				tw := tabwriter.NewWriter(out, 0, 0, 2, ' ', 0)
 				for _, m := range r.Members {
 					addr := "-"

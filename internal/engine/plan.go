@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"net/netip"
+	"os"
+	"path/filepath"
 	"slices"
 	"sort"
 	"strings"
@@ -57,6 +59,7 @@ type NetPlan struct {
 	Name    string
 	Iface   string
 	Subnet  netip.Prefix
+	Subnet6 netip.Prefix // zero without IPv6
 	Port    uint16
 	Members []*MemberPlan
 }
@@ -335,13 +338,18 @@ func (s *Session) ipamRequest(facts map[string]*node.Facts) ipam.Request {
 		Used:     map[string][]ipam.Use{},
 		Ports:    map[string][]uint16{},
 	}
+	// Random IPv6 subnets come from this machine and directory, so plan and
+	// apply pick the same one; apply then records it.
+	host, _ := os.Hostname()
+	dir, _ := filepath.Abs(s.Dir)
+	req.Seed = host + "\x00" + dir
 	ours := map[string]bool{}
 	for _, n := range s.Inv.Networks {
 		ours[n.IfaceName()] = true
 	}
 	for _, name := range s.Inv.NetworkNames() {
 		n := s.Inv.Networks[name]
-		net := ipam.Net{Name: name, Subnet: n.Subnet.Prefix, Port: uint16(n.Port)}
+		net := ipam.Net{Name: name, Subnet: n.Subnet.Prefix, IPv6: n.IPv6.On, Subnet6: n.IPv6.Subnet, Port: uint16(n.Port)}
 		for _, m := range n.Members {
 			net.Members = append(net.Members, ipam.Member{Node: m.Name, Addr: m.Addr})
 			// Subnets routed through a member are taken on every member.
@@ -352,7 +360,7 @@ func (s *Session) ipamRequest(facts map[string]*node.Facts) ipam.Request {
 			}
 		}
 		if sn, ok := s.State.Networks[name]; ok {
-			net.Prev = ipam.Assigned{Subnet: sn.Subnet, Port: sn.Port, Addrs: sn.Addrs()}
+			net.Prev = ipam.Assigned{Subnet: sn.Subnet, Subnet6: sn.Subnet6, Port: sn.Port, Addrs: sn.Addrs()}
 		}
 		req.Networks = append(req.Networks, net)
 	}
@@ -415,7 +423,7 @@ func ignorable(p netip.Prefix) bool {
 // planNetwork compares each member's interface with what it should be.
 func (s *Session) planNetwork(ctx context.Context, p *Plan, n *config.Network) *NetPlan {
 	a := p.assigned[n.Name]
-	np := &NetPlan{Name: n.Name, Iface: n.IfaceName(), Subnet: a.Subnet, Port: a.Port}
+	np := &NetPlan{Name: n.Name, Iface: n.IfaceName(), Subnet: a.Subnet, Subnet6: a.Subnet6, Port: a.Port}
 	p.keys[n.Name] = map[string]string{}
 	sn := s.State.Networks[n.Name]
 	for _, m := range n.Members {
@@ -448,6 +456,9 @@ func (s *Session) planNetwork(ctx context.Context, p *Plan, n *config.Network) *
 	}
 	s.warnUnreachablePairs(ctx, p, n)
 	s.checkRoutes(p, n)
+	if f := p.facts[n.Hub]; f != nil && a.Subnet6.IsValid() && !f.Forward6 && !f.Forward6Iface {
+		p.warn("network %s: %s can't pass IPv6 between the others until IPv6 forwarding is on there; turn it on with \"sysctl -w net.ipv6.conf.all.forwarding=1\" and keep it in /etc/sysctl.d/", n.Name, n.Hub)
+	}
 	s.planPSKs(p, n, sn)
 
 	for _, m := range n.Members {
@@ -578,6 +589,9 @@ func (s *Session) desired(ctx context.Context, p *Plan, n *config.Network, membe
 	if k := s.Inv.Nodes[member].Keepalive; k != 0 {
 		keepalive = k
 	}
+	if ip, ok := a.Addrs6[member]; ok {
+		i.Addresses = append(i.Addresses, netip.PrefixFrom(ip, a.Subnet6.Bits()))
+	}
 	i.Forward = n.Hub != "" && member == n.Hub
 	for _, peer := range n.Members {
 		if !n.Linked(member, peer.Name) {
@@ -594,10 +608,17 @@ func (s *Session) desired(ctx context.Context, p *Plan, n *config.Network, membe
 		if e, err := s.Endpoint(ctx, peer.Name); err == nil && !e.None {
 			endpoint = e.Dial(a.Port)
 		}
-		allowed := append([]netip.Prefix{netip.PrefixFrom(a.Addrs[peer.Name], 32)}, peer.Routes...)
+		allowed := []netip.Prefix{netip.PrefixFrom(a.Addrs[peer.Name], 32)}
+		if ip, ok := a.Addrs6[peer.Name]; ok {
+			allowed = append(allowed, netip.PrefixFrom(ip, 128))
+		}
+		allowed = append(allowed, peer.Routes...)
 		if peer.Name == n.Hub {
 			// The rest of the network, and every subnet routed in it, is behind the hub.
 			allowed = []netip.Prefix{a.Subnet}
+			if a.Subnet6.IsValid() {
+				allowed = append(allowed, a.Subnet6)
+			}
 			for _, m := range n.Members {
 				if m.Name != member {
 					allowed = append(allowed, m.Routes...)
@@ -628,8 +649,20 @@ func (s *Session) checkRoutes(p *Plan, n *config.Network) {
 		if len(m.Routes) == 0 {
 			continue
 		}
-		if f := p.facts[m.Name]; f != nil && !f.Forward4 {
-			p.warn("%s routes %s for the others, but IP forwarding is off there; turn it on with \"sysctl -w net.ipv4.ip_forward=1\" and keep it in /etc/sysctl.d/", m.Name, joinPrefixes(m.Routes))
+		var v4, v6 []netip.Prefix
+		for _, r := range m.Routes {
+			if r.Addr().Is4() {
+				v4 = append(v4, r)
+			} else {
+				v6 = append(v6, r)
+			}
+		}
+		f := p.facts[m.Name]
+		if f != nil && len(v4) > 0 && !f.Forward4 {
+			p.warn("%s routes %s for the others, but IP forwarding is off there; turn it on with \"sysctl -w net.ipv4.ip_forward=1\" and keep it in /etc/sysctl.d/", m.Name, joinPrefixes(v4))
+		}
+		if f != nil && len(v6) > 0 && !f.Forward6 {
+			p.warn("%s routes %s for the others, but IPv6 forwarding is off there; turn it on with \"sysctl -w net.ipv6.conf.all.forwarding=1\" and keep it in /etc/sysctl.d/", m.Name, joinPrefixes(v6))
 		}
 		for _, other := range n.Members {
 			f := p.facts[other.Name]

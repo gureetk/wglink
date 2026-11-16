@@ -42,6 +42,9 @@ All 3 links are ok.
   addresses are picked for you, kept across runs, and chosen to avoid
   addresses, routes and ports already in use on each machine. Pin any of them
   when you care: a host part (`.10`), a full address, a subnet or a port.
+- **IPv6, preshared keys and key rotation.** Give any network a unique local
+  IPv6 subnet and every pair of peers a preshared key, and replace keys with
+  one command.
 - **Plan before you apply.** Every change is previewed. Peer changes load
   live with `wg syncconf`; only address, port and MTU changes restart an
   interface.
@@ -244,6 +247,25 @@ The other members then send 192.168.50.0/24 through `nas`. For that to work:
 In `wglink.yaml` the routes live on the member:
 `nas: {routes: [192.168.50.0/24]}`.
 
+## IPv6
+
+Networks carry IPv4 by default. Add IPv6 inside the tunnels with `--ipv6`:
+
+```sh
+wglink connect pve1 nas vps --name lab --ipv6       # a random unique local /64
+wglink net set lab --ipv6=fd12:3456:789a::/64       # or a fixed subnet
+```
+
+Each member gets the IPv6 address with the same host number as its IPv4
+one, so `10.99.0.5` goes with `fd12:3456:789a::5`. The random subnet follows
+RFC 4193, so networks set up apart won't clash if you join them later. Like
+the IPv4 subnet, it's recorded at the first apply and kept.
+
+In a hub network, the hub forwards IPv6 for its WireGuard interface alone on
+Linux 6.17 and later. Older kernels forward IPv6 only with it on for the
+whole machine (`net.ipv6.conf.all.forwarding=1`), and `plan` warns until it
+is. Endpoints can be IPv6 addresses too.
+
 ## Preshared keys
 
 WireGuard can mix a preshared key into each pair's handshake on top of the
@@ -315,6 +337,7 @@ Network settings, all optional:
 | `keepalive` | off | seconds between keepalives, for members behind NAT |
 | `hub` | none: a full mesh | member the others connect through |
 | `psk` | off | a preshared key for each pair of peers |
+| `ipv6` | off | `auto` for a random unique local /64, or a subnet |
 
 What wglink picks is recorded in `wglink.state.json` next to the inventory, so
 addresses don't move when you add members later. The state file holds public
@@ -461,7 +484,6 @@ It removes the old release and tag only after the new build passes.
 
 - **0.3:**
   - A terminal UI.
-  - IPv6.
 
 See [CHANGELOG.md](CHANGELOG.md) for what each release added.
 

@@ -45,6 +45,49 @@ func (s Subnet) MarshalText() ([]byte, error) {
 	return []byte(s.Prefix.String()), nil
 }
 
+// IPv6 is a network's IPv6 setting. The zero value is off; On without a
+// Subnet means a random unique local /64, picked once.
+type IPv6 struct {
+	On     bool
+	Subnet netip.Prefix
+}
+
+// ParseIPv6 parses "auto", "off" or an IPv6 CIDR such as fd12:3456:789a::/64.
+func ParseIPv6(s string) (IPv6, error) {
+	switch s {
+	case "auto", "on", "true":
+		return IPv6{On: true}, nil
+	case "", "off", "false":
+		return IPv6{}, nil
+	}
+	if p, err := netip.ParsePrefix(s); err == nil && !p.Addr().Is6() {
+		return IPv6{}, fmt.Errorf("ipv6 %s: must be an IPv6 subnet", s)
+	}
+	p, err := parseNetPrefix(s, 32, 120)
+	if err != nil {
+		return IPv6{}, err
+	}
+	return IPv6{On: true, Subnet: p}, nil
+}
+
+// UnmarshalText implements encoding.TextUnmarshaler.
+func (v *IPv6) UnmarshalText(b []byte) error {
+	x, err := ParseIPv6(string(b))
+	*v = x
+	return err
+}
+
+// MarshalText implements encoding.TextMarshaler.
+func (v IPv6) MarshalText() ([]byte, error) {
+	switch {
+	case v.Subnet.IsValid():
+		return []byte(v.Subnet.String()), nil
+	case v.On:
+		return []byte("auto"), nil
+	}
+	return []byte("off"), nil
+}
+
 // parseNetPrefix parses a CIDR that must be a network address with bits in [lo, hi].
 func parseNetPrefix(s string, lo, hi int) (netip.Prefix, error) {
 	p, err := netip.ParsePrefix(s)

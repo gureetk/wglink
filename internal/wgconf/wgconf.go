@@ -34,6 +34,10 @@ type Interface struct {
 // up, so a hub can pass traffic between its peers.
 const ForwardHook = "echo 1 > /proc/sys/net/ipv4/conf/%i/forwarding"
 
+// Forward6Hook does the same for IPv6 on kernels that can (Linux 6.17 and
+// later); older ones forward IPv6 only with net.ipv6.conf.all.forwarding.
+const Forward6Hook = "if [ -e /proc/sys/net/ipv6/conf/%i/force_forwarding ]; then echo 1 > /proc/sys/net/ipv6/conf/%i/force_forwarding; fi"
+
 // Peer is one [Peer] section.
 type Peer struct {
 	Name         string // from the comment line after [Peer]
@@ -63,6 +67,9 @@ func Render(i Interface) []byte {
 	}
 	if i.Forward {
 		fmt.Fprintf(&b, "PostUp = %s\n", ForwardHook)
+		if slices.ContainsFunc(i.Addresses, func(p netip.Prefix) bool { return p.Addr().Is6() }) {
+			fmt.Fprintf(&b, "PostUp = %s\n", Forward6Hook)
+		}
 	}
 	peers := slices.Clone(i.Peers)
 	slices.SortFunc(peers, func(a, b Peer) int { return strings.Compare(a.Name, b.Name) })

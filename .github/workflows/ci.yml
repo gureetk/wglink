@@ -96,6 +96,7 @@ jobs:
             msg=$(tail -n 150 test.log | sed 's/%/%25/g' | awk '{ printf "%s%%0A", $0 }')
             echo "::error title=integration tests failed::$msg"
           fi
-          # Show which nodes took part on the run's summary.
+          # Show which nodes took part, and any tests skipped, on the run's summary.
           echo "::notice title=integration lab::$(grep -m 1 -o 'addresses: .*' test.log || echo 'no lab started')"
+          echo "::notice title=skipped tests::$(grep -o -- '--- SKIP: [^ ]*' test.log | cut -d ' ' -f 3 | paste -sd ' ' - | grep . || echo none)"
           exit "$status"

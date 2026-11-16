@@ -19,12 +19,14 @@ type Facts struct {
 	Module   bool // /sys/module/wireguard exists
 	Forward4 bool
 	Forward6 bool
-	Addrs    []Addr
-	Routes   []Route
-	UDPPorts []uint16
-	WGPorts  map[string]uint16 // listen port per WireGuard interface
-	Managed  map[string]string // interface -> network, for configs wglink wrote
-	Ifaces   map[string]*Iface // the interfaces asked about
+	// Forward6Iface: the kernel can forward IPv6 on one interface alone.
+	Forward6Iface bool
+	Addrs         []Addr
+	Routes        []Route
+	UDPPorts      []uint16
+	WGPorts       map[string]uint16 // listen port per WireGuard interface
+	Managed       map[string]string // interface -> network, for configs wglink wrote
+	Ifaces        map[string]*Iface // the interfaces asked about
 }
 
 // Addr is an address on an interface.
@@ -107,6 +109,8 @@ func parseProbe(out []byte) (*Facts, error) {
 			f.Forward4 = d.arg == "1"
 		case "forward6":
 			f.Forward6 = d.arg == "1"
+		case "forward6iface":
+			f.Forward6Iface = true
 		case "managed":
 			iface, network, _ := strings.Cut(d.arg, " ")
 			f.Managed[iface] = network

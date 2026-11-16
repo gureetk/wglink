@@ -5,9 +5,13 @@
 package ipam
 
 import (
+	"crypto/rand"
+	"crypto/sha256"
 	"errors"
 	"fmt"
+	"maps"
 	"net/netip"
+	"slices"
 	"sort"
 
 	"github.com/gureetk/wglink/internal/config"
@@ -23,12 +27,17 @@ type Request struct {
 	Used map[string][]Use
 	// Ports lists UDP ports in use on each node, leaving out wglink's own interfaces.
 	Ports map[string][]uint16
+	// Seed makes random IPv6 subnets repeatable, so a plan and the apply
+	// after it agree. Empty means truly random.
+	Seed string
 }
 
 // Net is one network to resolve.
 type Net struct {
 	Name    string
 	Subnet  netip.Prefix // fixed in wglink.yaml; zero means automatic
+	IPv6    bool         // the network has IPv6 too
+	Subnet6 netip.Prefix // fixed in wglink.yaml; zero means automatic
 	Port    uint16       // fixed in wglink.yaml; zero means automatic
 	Members []Member
 	Prev    Assigned // what was recorded last time
@@ -48,9 +57,11 @@ type Use struct {
 
 // Assigned is the outcome for one network.
 type Assigned struct {
-	Subnet netip.Prefix
-	Port   uint16
-	Addrs  map[string]netip.Addr
+	Subnet  netip.Prefix
+	Subnet6 netip.Prefix // zero without IPv6
+	Port    uint16
+	Addrs   map[string]netip.Addr
+	Addrs6  map[string]netip.Addr
 }
 
 // Resolve assigns every network a subnet, a port and member addresses.
@@ -61,7 +72,7 @@ func Resolve(req Request) (map[string]*Assigned, error) {
 
 	// Fixed and recorded subnets claim space first, then the rest are picked.
 	for _, n := range nets {
-		r.out[n.Name] = &Assigned{Addrs: map[string]netip.Addr{}}
+		r.out[n.Name] = &Assigned{Addrs: map[string]netip.Addr{}, Addrs6: map[string]netip.Addr{}}
 		switch {
 		case n.Subnet.IsValid():
 			r.claimSubnet(n, n.Subnet, "")
@@ -90,6 +101,26 @@ func Resolve(req Request) (map[string]*Assigned, error) {
 	for _, n := range nets {
 		if r.out[n.Name].Subnet.IsValid() {
 			r.assignAddrs(n)
+		}
+	}
+	// IPv6: fixed and recorded subnets first, then random ones.
+	for _, n := range nets {
+		switch {
+		case !n.IPv6:
+		case n.Subnet6.IsValid():
+			r.claimSubnet6(n, n.Subnet6, "")
+		case n.Prev.Subnet6.IsValid():
+			r.claimSubnet6(n, n.Prev.Subnet6, " (picked earlier; pin a different one with --ipv6)")
+		}
+	}
+	for _, n := range nets {
+		if n.IPv6 && !n.Subnet6.IsValid() && !n.Prev.Subnet6.IsValid() {
+			r.pickSubnet6(n)
+		}
+	}
+	for _, n := range nets {
+		if r.out[n.Name].Subnet6.IsValid() {
+			r.assignAddrs6(n)
 		}
 	}
 	if len(r.errs) > 0 {
@@ -298,4 +329,80 @@ func u32(a netip.Addr) uint32 {
 
 func addr4(v uint32) netip.Addr {
 	return netip.AddrFrom4([4]byte{byte(v >> 24), byte(v >> 16), byte(v >> 8), byte(v)})
+}
+
+// claimSubnet6 takes a fixed or recorded IPv6 subnet after checking for clashes.
+func (r *resolver) claimSubnet6(n Net, p netip.Prefix, hint string) {
+	if clash := r.clash6(n, p); clash != "" {
+		r.fail(n, "IPv6 subnet %s overlaps %s%s", p, clash, hint)
+		return
+	}
+	r.out[n.Name].Subnet6 = p
+}
+
+// pickSubnet6 picks a unique local /64 at random, as RFC 4193 asks, so
+// networks set up apart can still be joined later.
+func (r *resolver) pickSubnet6(n Net) {
+	for i := range 10 {
+		var b [16]byte
+		b[0] = 0xfd
+		if r.req.Seed != "" {
+			sum := sha256.Sum256(fmt.Appendf(nil, "%s\x00%s\x00%d", r.req.Seed, n.Name, i))
+			copy(b[1:6], sum[:])
+		} else if _, err := rand.Read(b[1:6]); err != nil {
+			r.fail(n, "picking an IPv6 subnet: %v", err)
+			return
+		}
+		p := netip.PrefixFrom(netip.AddrFrom16(b), 64)
+		if r.clash6(n, p) == "" {
+			r.out[n.Name].Subnet6 = p
+			return
+		}
+	}
+	r.fail(n, "couldn't find a free IPv6 subnet; pin one with --ipv6=PREFIX")
+}
+
+// clash6 describes what an IPv6 subnet would overlap, or returns "".
+func (r *resolver) clash6(n Net, p netip.Prefix) string {
+	for _, m := range n.Members {
+		for _, u := range r.req.Used[m.Node] {
+			if u.Prefix.Overlaps(p) {
+				return fmt.Sprintf("%s (%s) on %s", u.Prefix, u.What, m.Node)
+			}
+		}
+	}
+	for _, name := range slices.Sorted(maps.Keys(r.out)) {
+		if a := r.out[name]; a.Subnet6.IsValid() && a.Subnet6.Overlaps(p) && r.shareNode(name, n.Name) {
+			return fmt.Sprintf("network %s (%s), which shares a node with it", name, a.Subnet6)
+		}
+	}
+	return ""
+}
+
+// assignAddrs6 gives each member the IPv6 address with its IPv4 host number,
+// so 10.99.0.5 goes with fd..::5.
+func (r *resolver) assignAddrs6(n Net) {
+	a := r.out[n.Name]
+	for _, m := range n.Members {
+		ip, ok := a.Addrs[m.Node]
+		if !ok {
+			continue
+		}
+		if a.Addrs6[m.Node], ok = Addr6(a.Subnet, a.Subnet6, ip); !ok {
+			r.fail(n, "IPv6 subnet %s is too small for %s, host number %d", a.Subnet6, m.Node, u32(ip)-u32(a.Subnet.Addr()))
+		}
+	}
+}
+
+// Addr6 is the address in subnet6 with ip's host number in subnet.
+func Addr6(subnet, subnet6 netip.Prefix, ip netip.Addr) (netip.Addr, bool) {
+	host := u32(ip) - u32(subnet.Addr())
+	if bits := 128 - subnet6.Bits(); bits < 32 && host>>bits != 0 {
+		return netip.Addr{}, false
+	}
+	b := subnet6.Addr().As16()
+	for i := range 4 {
+		b[15-i] |= byte(host >> (8 * i))
+	}
+	return netip.AddrFrom16(b), true
 }

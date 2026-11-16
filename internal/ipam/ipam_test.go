@@ -208,3 +208,49 @@ func TestUsable(t *testing.T) {
 		}
 	}
 }
+
+func TestIPv6(t *testing.T) {
+	lab := Net{Name: "lab", IPv6: true, Members: members("a", "b")}
+	lab.Members[1].Addr = spec(t, ".10")
+	res, err := Resolve(base(lab, Net{Name: "v4", Members: members("a", "b")}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	a := res["lab"]
+	if s := a.Subnet6; s.Bits() != 64 || s.Addr().As16()[0] != 0xfd || s.Addr().As16()[6] != 0 || s.Addr().As16()[7] != 0 {
+		t.Errorf("subnet6 = %s, want a random unique local /64", s)
+	}
+	if b := a.Addrs6["b"]; !a.Subnet6.Contains(b) || b.As16()[15] != 10 || b.As16()[14] != 0 {
+		t.Errorf("b = %s, want host number 10 in %s", b, a.Subnet6)
+	}
+	if res["v4"].Subnet6.IsValid() || len(res["v4"].Addrs6) > 0 {
+		t.Errorf("v4-only network got %+v", res["v4"])
+	}
+	// A seed makes the pick repeatable, and different for each network.
+	seeded := base(lab, Net{Name: "lab2", IPv6: true, Members: members("c")})
+	seeded.Seed = "host\x00/srv/wglink"
+	r1, _ := Resolve(seeded)
+	r2, _ := Resolve(seeded)
+	if r1["lab"].Subnet6 != r2["lab"].Subnet6 || r1["lab"].Subnet6 == r1["lab2"].Subnet6 {
+		t.Errorf("seeded: %s, %s, %s", r1["lab"].Subnet6, r2["lab"].Subnet6, r1["lab2"].Subnet6)
+	}
+
+	// Recorded and fixed subnets are kept.
+	lab.Prev = Assigned{Subnet6: pfx("fd01:2:3::/64")}
+	if res, _ := Resolve(base(lab)); res["lab"].Subnet6 != pfx("fd01:2:3::/64") || res["lab"].Addrs6["a"] != ip("fd01:2:3::1") {
+		t.Errorf("recorded: %+v", res["lab"])
+	}
+	lab.Subnet6 = pfx("fd09::/120")
+	if res, _ := Resolve(base(lab)); res["lab"].Subnet6 != pfx("fd09::/120") || res["lab"].Addrs6["b"] != ip("fd09::a") {
+		t.Errorf("fixed: %+v", res["lab"])
+	}
+
+	lab.Subnet6 = pfx("fd09::/125")
+	wantErr(t, base(lab), "IPv6 subnet fd09::/125 is too small for b, host number 10")
+	lab.Subnet6 = pfx("fd09::/64")
+	req := base(lab)
+	req.Used = map[string][]Use{"a": {{Prefix: pfx("fd09::/48"), What: "address on eth0"}}}
+	wantErr(t, req, "IPv6 subnet fd09::/64 overlaps fd09::/48 (address on eth0) on a")
+	other := Net{Name: "other", IPv6: true, Subnet6: pfx("fd09::/64"), Members: members("a")}
+	wantErr(t, base(lab, other), "overlaps network")
+}

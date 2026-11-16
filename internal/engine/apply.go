@@ -90,7 +90,7 @@ func (s *Session) Apply(ctx context.Context, p *Plan, logf Logf) error {
 	for _, np := range p.Networks {
 		n := s.Inv.Networks[np.Name]
 		sn := s.State.Net(np.Name)
-		sn.Iface, sn.Subnet, sn.Port = np.Iface, np.Subnet, np.Port
+		sn.Iface, sn.Subnet, sn.Subnet6, sn.Port = np.Iface, np.Subnet, np.Subnet6, np.Port
 		for _, mp := range np.Members {
 			if mp.Action == Skip {
 				continue

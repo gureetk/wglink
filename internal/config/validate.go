@@ -166,6 +166,8 @@ func (inv *Inventory) validateNetwork(n *Network) []error {
 				add("member %s: routes: %s would send all traffic through %s, which wglink doesn't support", m.Name, r, m.Name)
 			case !n.Subnet.Auto() && r.Overlaps(n.Subnet.Prefix):
 				add("member %s: routes: %s overlaps the network's subnet %s", m.Name, r, n.Subnet)
+			case n.IPv6.Subnet.IsValid() && r.Overlaps(n.IPv6.Subnet):
+				add("member %s: routes: %s overlaps the network's IPv6 subnet %s", m.Name, r, n.IPv6.Subnet)
 			}
 			for _, o := range routed {
 				if r.Overlaps(o.p) {

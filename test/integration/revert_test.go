@@ -94,11 +94,10 @@ func TestRevertTimer(t *testing.T) {
 	if _, err := host.Write(ctx, node.Write{Iface: "wgl-revert2", Config: config("198.18.6.1/24", 51993), Revert: 3 * time.Second}); err != nil {
 		t.Fatal(err)
 	}
-	waitFor("the new interface to go", func() bool {
-		_, err := root("ip", "link", "show", "wgl-revert2")
-		return err != nil
+	// The script removes the config just after the interface goes.
+	waitFor("the new interface and its config to go", func() bool {
+		_, link := root("ip", "link", "show", "wgl-revert2")
+		_, conf := root("test", "-e", "/etc/wireguard/wgl-revert2.conf")
+		return link != nil && conf != nil
 	})
-	if _, err := root("test", "-e", "/etc/wireguard/wgl-revert2.conf"); err == nil {
-		t.Error("the new interface's config is still there")
-	}
 }
