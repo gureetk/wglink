@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>wglink: WireGuard between your Linux machines</title>
+<meta name="description" content="Connect Linux machines over WireGuard from one inventory file. Plan, apply and check tunnels over SSH and Proxmox, with no agent.">
+<meta name="color-scheme" content="light dark">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<script>try{var t=localStorage.getItem("theme");if(t==="light"||t==="dark")document.documentElement.dataset.theme=t}catch(e){}</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=JetBrains+Mono:wght@400;600&amp;family=Space+Grotesk:wght@500;600;700&amp;display=swap">
+<link rel="stylesheet" href="style.css">
+<script src="site.js" defer></script>
+</head>
+<body>
+
+<header class="top">
+<div class="wrap">
+<a class="brand" href="./"><span class="dot" aria-hidden="true"></span>wglink</a>
+<nav class="nav" aria-label="Main">
+<a href="#features">Features</a>
+<a href="#how">How it works</a>
+<a href="#dashboard">Dashboard</a>
+<a href="#security">Security</a>
+<a href="docs/">Docs</a>
+<a class="button" href="https://github.com/gureetk/wglink">GitHub</a>
+<button class="button theme-toggle" type="button" aria-label="Switch theme">
+<svg class="moon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+<svg class="sun" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
+</button>
+</nav>
+</div>
+</header>
+
+<main>
+<section class="wrap hero">
+<div>
+<p class="eyebrow">WireGuard for homelabs, servers and Proxmox</p>
+<h1>Connect your Linux machines over WireGuard, from one file.</h1>
+<p class="lead">List your machines in <code>wglink.yaml</code>, preview the change with <code>wglink plan</code>, and make it with <code>wglink apply</code>. Private keys are made on the machines that use them and never leave.</p>
+<div class="actions">
+<a class="button primary" href="#install">Install v0.4.0</a>
+<a class="button" href="docs/">Read the quick start</a>
+</div>
+<p class="fine">One static binary · no agent · no server · no account · MIT</p>
+</div>
+<div class="term">
+<div class="bar"><span></span><span></span><span></span><span class="path">~/infra</span></div>
+<pre><span class="t-dim">$</span> wglink connect pve1 nas pi --name lab
+Network lab: pve1, nas, pi.
+<span class="t-dim">$</span> wglink plan
+network lab   wg-lab   10.99.0.0/24   udp/51820
+  <span class="t-ok">+</span> pve1  10.99.0.1   new interface, 2 peers, new key
+  <span class="t-ok">+</span> nas   10.99.0.2   new interface, 2 peers, new key
+  <span class="t-ok">+</span> pi    10.99.0.3   new interface, 2 peers, new key
+
+3 to create, 0 to change live, 0 to restart, 0 to remove.
+<span class="t-dim">$</span> wglink apply --yes &amp;&amp; wglink status
+  pve1 &lt;-&gt; nas  <span class="t-ok">ok</span>  handshake 14s ago, ping 0.4 ms
+  pve1 &lt;-&gt; pi   <span class="t-ok">ok</span>  idle, ping 1.1 ms
+  nas &lt;-&gt; pi    <span class="t-ok">ok</span>  handshake 1m ago, ping 0.9 ms
+
+All 3 links are ok.</pre>
+</div>
+</section>
+
+<section class="reach" aria-label="Ways to reach machines">
+<div class="wrap">
+<span>Reaches machines the way you already do:</span>
+<span>SSH</span><span>local</span><span>docker exec</span><span>Proxmox containers (pct)</span><span>Proxmox VMs (guest agent)</span><span>phones (export)</span>
+</div>
+</section>
+
+<section class="block" id="features">
+<div class="wrap">
+<h2>Infrastructure habits, for your tunnels.</h2>
+<p>What wglink leaves behind are ordinary <code>wg-quick</code> configs that keep working without it.</p>
+<div class="cards">
+<div class="card"><p class="tag">wglink plan</p><h3>Plan before you apply</h3><p>Every change is previewed. Peer changes load live with <code>wg syncconf</code>; address, port and MTU changes restart the interface.</p></div>
+<div class="card"><p class="tag">wg genkey, on the node</p><h3>Keys stay home</h3><p>Each private key is made on the machine that uses it, and only public keys come back. Rotate them with one command, and add a preshared key for each pair.</p></div>
+<div class="card"><p class="tag">revert timer</p><h3>Safe changes over SSH</h3><p>A change that cuts wglink off from a node is undone by the node itself a minute later, unless wglink confirms it over a fresh connection.</p></div>
+<div class="card"><p class="tag">wglink discover pve1</p><h3>Made for Proxmox</h3><p>List a host's containers and VMs and add them as nodes. Guests are reached through the host, so they need no SSH.</p></div>
+<div class="card"><p class="tag">--hub · routes · --ipv6</p><h3>Any shape of network</h3><p>Full mesh or hub-and-spoke, subnets routed through a member, IPv6 inside the tunnels, and phones set up with <code>wglink export</code>.</p></div>
+<div class="card"><p class="tag">wglink status --json</p><h3>Health at a glance</h3><p>Every link is judged from handshakes and pings through the tunnel, with JSON for scripts and exit codes for monitoring.</p></div>
+</div>
+</div>
+</section>
+
+<section class="block" id="how">
+<div class="wrap">
+<h2>How it works</h2>
+<p>No agent: small shell scripts, embedded in the binary, run over the connections you already use.</p>
+<ol class="steps">
+<li><strong>Probe</strong><span>Read-only scripts report addresses, routes, ports and WireGuard configs, private keys removed.</span></li>
+<li><strong>Resolve</strong><span>Pinned values first, then ones recorded earlier, then new picks that avoid everything in use.</span></li>
+<li><strong>Diff</strong><span>Each config is rendered and compared with the node's; hand edits show up as drift.</span></li>
+<li><strong>Apply</strong><span>Configs travel without private keys; each node inserts its own and loads the change.</span></li>
+<li><strong>Confirm</strong><span>A fresh SSH connection cancels the node's revert timer, or the node undoes the change.</span></li>
+</ol>
+</div>
+</section>
+
+<section class="block" id="dashboard">
+<div class="wrap split">
+<div>
+<h2>A dashboard in your terminal</h2>
+<p><code>wglink ui</code> shows every network and the health of its links, checked again every 10 seconds.</p>
+<p>Add a node, connect it, review the plan and apply it, without leaving the screen.</p>
+</div>
+<div class="term">
+<pre><b>wglink</b>  <span class="t-dim">~/infra/wglink.yaml  checked 12:04:05</span>
+
+<b>NETWORKS</b>       network lab   wg-lab   10.99.0.0/24   udp/51820
+<span class="t-sel"> <span class="t-ok">✓</span> lab 3/3 </span>      pve1  10.99.0.1       up
+ <span class="t-bad">✗</span> road 0/1      nas   10.99.0.2       up
+                 vps   10.99.0.3       up
+
+                 pve1 &lt;-&gt; nas  <span class="t-ok">ok</span>    rx 45.8 MiB  tx 3.0 MiB
+                 pve1 &lt;-&gt; vps  <span class="t-ok">ok</span>    rx 2.1 MiB  tx 9.3 MiB
+                 nas &lt;-&gt; vps   <span class="t-ok">ok</span>    rx 878.9 KiB  tx 1.1 MiB
+
+<span class="t-dim">↑/↓ network · p plan · c connect nodes · n new node · q quit</span></pre>
+</div>
+</div>
+</section>
+
+<section class="block" id="security">
+<div class="wrap">
+<h2>Built to be trusted with root</h2>
+<p>wglink runs as root on your machines, so it keeps its footprint small and its secrets where they belong.</p>
+<ul class="points">
+<li><strong>Private keys never travel</strong><span>Configs are sent without them, and each node fills in its own key as it writes the file.</span></li>
+<li><strong>No secrets on the controller</strong><span>The state file holds public keys, addresses and hashes. Preshared keys are compared by hash.</span></li>
+<li><strong>Nothing to inject into</strong><span>Scripts go to <code>sh</code> over stdin; their only inputs are a few validated, quoted variables.</span></li>
+<li><strong>Tested on real WireGuard</strong><span>CI builds networks in Linux namespaces, and fails if a key ever shows up in a script's output.</span></li>
+</ul>
+</div>
+</section>
+
+<section class="block" id="install">
+<div class="wrap">
+<div class="install">
+<div>
+<h2>Install</h2>
+<p>Packages for Debian, Ubuntu, Fedora and RHEL install shell completions and recommend <code>wireguard-tools</code>. Everything is built for Linux on amd64, arm64 and armv7.</p>
+<p><a href="https://github.com/gureetk/wglink/releases/latest">All downloads and checksums</a></p>
+</div>
+<div class="tabbed">
+<div class="tabs" role="tablist" aria-label="Ways to install">
+<button type="button" role="tab" id="tab-deb" aria-controls="panel-deb" aria-selected="true">Debian, Ubuntu</button>
+<button type="button" role="tab" id="tab-rpm" aria-controls="panel-rpm" aria-selected="false">Fedora, RHEL</button>
+<button type="button" role="tab" id="tab-tar" aria-controls="panel-tar" aria-selected="false">Any Linux</button>
+<button type="button" role="tab" id="tab-go" aria-controls="panel-go" aria-selected="false">Go</button>
+</div>
+<div class="term" role="tabpanel" id="panel-deb" aria-labelledby="tab-deb"><pre>VERSION=0.4.0 ARCH=amd64   <span class="t-dim"># or arm64, armhf</span>
+curl -fsSLO "https://github.com/gureetk/wglink/releases/download/v$VERSION/wglink_${VERSION}-1_$ARCH.deb"
+sudo apt install "./wglink_${VERSION}-1_$ARCH.deb"</pre></div>
+<div class="term" role="tabpanel" id="panel-rpm" aria-labelledby="tab-rpm"><pre>VERSION=0.4.0 ARCH=x86_64   <span class="t-dim"># or aarch64, armv7hl</span>
+curl -fsSLO "https://github.com/gureetk/wglink/releases/download/v$VERSION/wglink-$VERSION-1.$ARCH.rpm"
+sudo dnf install "./wglink-$VERSION-1.$ARCH.rpm"</pre></div>
+<div class="term" role="tabpanel" id="panel-tar" aria-labelledby="tab-tar"><pre>VERSION=0.4.0 ARCH=amd64   <span class="t-dim"># or arm64, armv7</span>
+curl -fsSLO "https://github.com/gureetk/wglink/releases/download/v$VERSION/wglink_${VERSION}_linux_$ARCH.tar.gz"
+curl -fsSLO "https://github.com/gureetk/wglink/releases/download/v$VERSION/SHA256SUMS"
+sha256sum --check --ignore-missing SHA256SUMS
+tar -xzf "wglink_${VERSION}_linux_$ARCH.tar.gz"
+sudo install "wglink_${VERSION}_linux_$ARCH/wglink" /usr/local/bin/</pre></div>
+<div class="term" role="tabpanel" id="panel-go" aria-labelledby="tab-go"><pre><span class="t-dim"># Go 1.26 or newer</span>
+go install github.com/gureetk/wglink/cmd/wglink@latest</pre></div>
+</div>
+</div>
+</div>
+</section>
+</main>
+
+<footer class="foot">
+<div class="wrap">
+<span>wglink is MIT licensed. Built by <a href="https://github.com/gureetk">gureet</a>.</span>
+<nav aria-label="Project">
+<a href="https://github.com/gureetk/wglink">Source</a>
+<a href="https://github.com/gureetk/wglink/releases">Releases</a>
+<a href="https://github.com/gureetk/wglink/blob/main/CHANGELOG.md">Changelog</a>
+</nav>
+</div>
+</footer>
+
+</body>
+</html>

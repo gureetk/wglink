@@ -517,6 +517,9 @@ builds them on every pull request and installs them on Debian and Fedora. To
 redo a release, run the workflow with **replace** ticked. It removes the old
 release and tag only after the new build passes.
 
+The website is plain HTML and CSS in `site/`. The **pages** workflow
+publishes it with GitHub Pages whenever it changes on `main`.
+
 | Package | Role |
 | --- | --- |
 | `cmd/wglink` | entry point |
