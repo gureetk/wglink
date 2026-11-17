@@ -1,0 +1,65 @@
+# Packages wglink as .deb and .rpm with nfpm. scripts/release.sh runs it with
+# VERSION, ARCH (amd64, arm64 or arm7) and DIR, the built release folder.
+name: wglink
+arch: ${ARCH}
+platform: linux
+version: ${VERSION}
+release: 1
+section: net
+priority: optional
+maintainer: gureet <noreply@git.gureet.ca>
+vendor: gureet
+homepage: https://github.com/gureetk/wglink
+license: MIT
+description: |-
+  Connect Linux machines over WireGuard from one inventory file.
+  wglink plans and applies wg-quick configs over SSH, local commands and
+  Proxmox guests, with no agent. Private keys are made on the machines
+  that use them.
+
+# The machine running wglink needs SSH to reach nodes, and WireGuard only if
+# it is a node too, so these are recommended rather than required.
+overrides:
+  deb:
+    recommends: [openssh-client, wireguard-tools]
+  rpm:
+    recommends: [openssh-clients, wireguard-tools]
+
+# expand: true lets ${DIR} through in each entry.
+contents:
+  - expand: true
+    src: ${DIR}/wglink
+    dst: /usr/bin/wglink
+    file_info: {mode: 0755}
+  - expand: true
+    src: ${DIR}/completions/wglink.bash
+    dst: /usr/share/bash-completion/completions/wglink
+  - expand: true
+    src: ${DIR}/completions/wglink.fish
+    dst: /usr/share/fish/vendor_completions.d/wglink.fish
+  - expand: true
+    src: ${DIR}/completions/_wglink
+    dst: /usr/share/zsh/vendor-completions/_wglink
+    packager: deb
+  - expand: true
+    src: ${DIR}/completions/_wglink
+    dst: /usr/share/zsh/site-functions/_wglink
+    packager: rpm
+  - expand: true
+    src: ${DIR}/LICENSE
+    dst: /usr/share/doc/wglink/copyright
+    packager: deb
+  - expand: true
+    src: ${DIR}/LICENSE
+    dst: /usr/share/licenses/wglink/LICENSE
+    type: license
+    packager: rpm
+  - expand: true
+    src: ${DIR}/README.md
+    dst: /usr/share/doc/wglink/README.md
+  - expand: true
+    src: ${DIR}/CHANGELOG.md
+    dst: /usr/share/doc/wglink/CHANGELOG.md
+  - expand: true
+    src: ${DIR}/THIRD_PARTY_LICENSES
+    dst: /usr/share/doc/wglink/THIRD_PARTY_LICENSES
