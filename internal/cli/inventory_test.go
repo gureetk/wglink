@@ -304,3 +304,13 @@ func TestIPv6Flags(t *testing.T) {
 		t.Errorf("--ipv6=off: %+v", v)
 	}
 }
+
+func TestJoiningAgainKeepsPins(t *testing.T) {
+	dir := newInventory(t)
+	wg(t, dir, "connect", "pve1", "nas", "--name", "lab", "--ip", "nas=.10")
+	wg(t, dir, "connect", "pve1", "nas", "--name", "lab")
+	wg(t, dir, "net", "join", "lab", "nas")
+	if m, _ := load(t, dir).Networks["lab"].Member("nas"); m.Addr.String() != ".10" {
+		t.Errorf("nas = %s, want its pinned .10", m.Addr)
+	}
+}

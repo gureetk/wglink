@@ -9,6 +9,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/gureetk/wglink/internal/config"
+	"github.com/gureetk/wglink/internal/edit"
 	"github.com/gureetk/wglink/internal/ipam"
 )
 
@@ -201,26 +202,13 @@ so on. Addresses are automatic unless pinned with --ip, as a host part
 					return fmt.Errorf("--ip %s: %s isn't one of the nodes being connected", n, n)
 				}
 			}
-			if name == "" {
-				name = autoName(i.inv, args)
-			}
 			fields, err := f.fields(cmd)
 			if err != nil {
 				return err
 			}
-			if _, exists := i.inv.Networks[name]; exists {
-				if len(fields) > 0 {
-					if err := i.doc.SetNetworkFields(name, fields...); err != nil {
-						return err
-					}
-				}
-			} else if err := i.doc.AddNetwork(name, fields...); err != nil {
+			name, err := edit.Connect(i.doc, i.inv, edit.Connection{Network: name, Nodes: args, Pins: pinned, Fields: fields})
+			if err != nil {
 				return err
-			}
-			for _, n := range args {
-				if err := i.doc.SetMember(name, n, pinned[n]); err != nil {
-					return err
-				}
 			}
 			if err := i.save(); err != nil {
 				return err
@@ -240,23 +228,6 @@ so on. Addresses are automatic unless pinned with --ip, as a host part
 	cmd.Flags().StringArrayVar(&pins, "ip", nil, "pin an address: NODE=.N, NODE=.N.N or NODE=ADDRESS (repeatable)")
 	f.add(cmd, false)
 	return cmd
-}
-
-// autoName names a new network after two nodes, or net1, net2...
-func autoName(inv *config.Inventory, nodes []string) string {
-	if len(nodes) == 2 {
-		if n := nodes[0] + "-" + nodes[1]; config.ValidNetworkName(n) {
-			if _, taken := inv.Networks[n]; !taken {
-				return n
-			}
-		}
-	}
-	for k := 1; ; k++ {
-		n := "net" + strconv.Itoa(k)
-		if _, taken := inv.Networks[n]; !taken {
-			return n
-		}
-	}
 }
 
 func contains(list []string, s string) bool {
@@ -314,22 +285,24 @@ func (a *app) newNetJoinCmd() *cobra.Command {
 			if err := i.needNetwork(args[0]); err != nil {
 				return err
 			}
-			var spec config.AddrSpec
+			var pins map[string]config.AddrSpec
 			if ip != "" {
 				if len(args) != 2 {
 					return errors.New("--ip applies to a single node")
 				}
-				if spec, err = config.ParseAddrSpec(ip); err != nil {
+				spec, err := config.ParseAddrSpec(ip)
+				if err != nil {
 					return err
 				}
+				pins = map[string]config.AddrSpec{args[1]: spec}
 			}
 			for _, n := range args[1:] {
 				if err := i.needNode(n); err != nil {
 					return err
 				}
-				if err := i.doc.SetMember(args[0], n, spec); err != nil {
-					return err
-				}
+			}
+			if _, err := edit.Connect(i.doc, i.inv, edit.Connection{Network: args[0], Nodes: args[1:], Pins: pins}); err != nil {
+				return err
 			}
 			if err := i.save(); err != nil {
 				return err
