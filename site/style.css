@@ -151,6 +151,10 @@ section.block > .wrap > p { margin: 0 0 40px; max-width: 640px; color: var(--bod
 .points strong { display: block; margin-bottom: 6px; }
 .points span { font-size: 15px; color: var(--body); }
 
+.more { font-weight: 600; }
+.more a { text-decoration: none; }
+section.block > .wrap > p.more { margin: 36px 0 0; }
+
 .install { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: clamp(24px, 4vw, 48px); display: flex; flex-wrap: wrap; gap: 40px; align-items: flex-start; }
 .install > div:first-child { flex: 1 1 280px; min-width: 0; }
 .install > div:first-child p { color: var(--body); }
@@ -175,16 +179,33 @@ section.block > .wrap > p { margin: 0 0 40px; max-width: 640px; color: var(--bod
 .sidebar a[aria-current="page"] { background: var(--active-bg); color: var(--active-ink); font-weight: 600; }
 .article { flex: 999 1 560px; min-width: 0; max-width: 780px; font-size: 16px; line-height: 1.65; }
 .article h1 { margin: 0 0 16px; font-weight: 700; font-size: clamp(32px, 4vw, 44px); line-height: 1.1; }
-.article h2 { margin: 36px 0 8px; font-size: 24px; font-weight: 600; }
+.article h2 { margin: 40px 0 8px; font-size: 26px; font-weight: 600; }
+.article h3 { margin: 32px 0 8px; font-size: 19px; font-weight: 600; }
 .article p, .article li { color: var(--body); }
-.article .lead { font-size: 18px; }
-.article .term { margin: 16px 0; border-radius: 10px; }
-.note { margin-top: 28px; padding: 20px 24px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
-.note ul { margin: 8px 0 0; padding-left: 20px; }
-.pager { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px; margin-top: 40px; padding-top: 24px; border-top: 1px solid var(--line); }
+.article li { margin-bottom: 4px; }
+.article pre { margin: 16px 0; padding: 18px 20px; overflow-x: auto; background: var(--term); border: 1px solid var(--term-border); border-radius: 10px; color: #e5e7ea; font-size: 13px; line-height: 1.7; }
+.article pre code { font-size: inherit; }
+.article :not(pre) > code { padding: 0.1em 0.35em; border-radius: 5px; background: var(--line); color: var(--ink); font-size: 0.88em; }
+.article a > code { color: inherit; }
+.article :is(h2, h3) > code { padding: 0; background: none; font-size: 0.92em; }
+.article table { display: block; overflow-x: auto; margin: 16px 0 24px; border-collapse: collapse; font-size: 15px; }
+.article th, .article td { text-align: left; vertical-align: top; padding: 10px 12px; border-bottom: 1px solid var(--line); }
+.article th { color: var(--ink); border-bottom-color: var(--line-strong); }
+/* The commands page's list of commands */
+.toc-title { margin: 28px 0 10px; font: 12px "JetBrains Mono", monospace; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+.toc { margin: 0; padding: 0; list-style: none; columns: 2 300px; column-gap: 32px; }
+.toc li { break-inside: avoid; margin: 0 0 12px; }
+.toc a { text-decoration: none; }
+.toc span { display: block; font-size: 14px; color: var(--muted); }
+.pager { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px; margin-top: 48px; padding-top: 24px; border-top: 1px solid var(--line); }
 .pager a { display: flex; flex-direction: column; text-decoration: none; font-weight: 600; }
 .pager a span { font-size: 13px; font-weight: 400; color: var(--muted); }
-.pager a:last-child { align-items: flex-end; }
+.pager .next { margin-left: auto; align-items: flex-end; text-align: right; }
+
+@media (min-width: 900px) {
+  /* Beside the page, the docs menu stays in view on long pages. */
+  .sidebar { position: sticky; top: 0; max-height: 100vh; overflow-y: auto; padding-block: 24px; margin-top: -24px; }
+}
 
 @media (max-width: 640px) {
   .hero { padding-block: 48px; gap: 40px; }

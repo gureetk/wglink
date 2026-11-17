@@ -1,0 +1,173 @@
+<!doctype html>
+<!-- Made by scripts/docgen from README.md and wglink's help. Edit those, not this file. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Development · wglink docs</title>
+<meta name="description" content="Testing, releasing and the layout of the wglink code.">
+<meta name="color-scheme" content="light dark">
+<link rel="icon" href="../favicon.svg" type="image/svg+xml">
+<script>try{var t=localStorage.getItem("theme");if(t==="light"||t==="dark")document.documentElement.dataset.theme=t}catch(e){}</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=JetBrains+Mono:wght@400;600&amp;family=Space+Grotesk:wght@500;600;700&amp;display=swap">
+<link rel="stylesheet" href="../style.css">
+<script src="../site.js" defer></script>
+</head>
+<body>
+
+<header class="top docs-top">
+<div class="wrap">
+<a class="brand" href="../"><span class="dot" aria-hidden="true"></span>wglink <span class="sub">docs</span></a>
+<nav class="nav" aria-label="Main">
+<a class="button" href="https://github.com/gureetk/wglink">GitHub</a>
+<button class="button theme-toggle" type="button" aria-label="Switch theme">
+<svg class="moon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+<svg class="sun" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
+</button>
+</nav>
+</div>
+</header>
+
+<div class="wrap docs">
+<nav class="sidebar" aria-label="Docs">
+<div>
+<p>Getting started</p>
+<a href="./">Overview</a>
+<a href="install.html">Install</a>
+<a href="quick-start.html">Quick start</a>
+<a href="inventory.html">The inventory</a>
+</div>
+<div>
+<p>Guides</p>
+<a href="reaching-machines.html">Reaching machines</a>
+<a href="phones.html">Phones and other devices</a>
+<a href="hub-and-spoke.html">Hub and spoke</a>
+<a href="routed-subnets.html">Routed subnets</a>
+<a href="ipv6.html">IPv6</a>
+<a href="preshared-keys.html">Preshared keys</a>
+<a href="rotating-keys.html">Rotating keys</a>
+<a href="removing.html">Removing nodes and networks</a>
+<a href="dashboard.html">Dashboard</a>
+</div>
+<div>
+<p>Reference</p>
+<a href="commands.html">Commands</a>
+<a href="status.html">Status</a>
+<a href="how-it-works.html">How it works</a>
+<a href="security.html">Security</a>
+<a href="compared.html">Compared with other tools</a>
+</div>
+<div>
+<p>Project</p>
+<a href="development.html" aria-current="page">Development</a>
+</div>
+</nav>
+
+<main class="article">
+<h1>Development</h1>
+<pre><code class="language-sh">go test ./...          # unit tests; node scripts run under dash, bash and busybox if present
+go vet ./...
+</code></pre>
+<p>The integration tests in <code>test/integration</code> build the binary and run it
+against real WireGuard interfaces in network namespaces. They change the
+machine they run on, so they need root (or passwordless sudo) and an explicit
+opt-in:</p>
+<pre><code class="language-sh">WGLINK_INTEGRATION=1 go test -tags integration -v ./test/integration/
+</code></pre>
+<p>CI runs them on every pull request, with the runner itself as a systemd node.</p>
+<p>To release, add the version's section to <code>CHANGELOG.md</code>, then push a <code>vX.Y.Z</code>
+tag, or run the <strong>release</strong> workflow from the Actions tab with the version
+(and, optionally, a commit). Either way it tests, builds the archives and
+packages with <code>scripts/release.sh</code>, and publishes them. The packages come
+from <a href="https://nfpm.goreleaser.com/">nfpm</a> and <code>packaging/nfpm.yaml</code>; CI
+builds them on every pull request and installs them on Debian and Fedora. To
+redo a release, run the workflow with <strong>replace</strong> ticked. It removes the old
+release and tag only after the new build passes.</p>
+<p>The website is plain HTML and CSS in <code>site/</code>. Its docs pages are made from
+this README and the commands' help by <code>go -C scripts/docgen run .</code>, and CI
+fails if they're out of date. The <strong>pages</strong> workflow publishes the site with
+GitHub Pages whenever it changes on <code>main</code>.</p>
+<table>
+<thead>
+<tr>
+<th>Package</th>
+<th>Role</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>cmd/wglink</code></td>
+<td>entry point</td>
+</tr>
+<tr>
+<td><code>internal/cli</code></td>
+<td>commands, flags and output</td>
+</tr>
+<tr>
+<td><code>internal/config</code></td>
+<td><code>wglink.yaml</code>: parsing, validation and comment-preserving edits</td>
+</tr>
+<tr>
+<td><code>internal/edit</code></td>
+<td>adding nodes and connecting them, shared by the commands and the dashboard</td>
+</tr>
+<tr>
+<td><code>internal/ipam</code></td>
+<td>subnet, port and address selection</td>
+</tr>
+<tr>
+<td><code>internal/engine</code></td>
+<td>plan, apply and status</td>
+</tr>
+<tr>
+<td><code>internal/node</code></td>
+<td>the embedded scripts and their parsers</td>
+</tr>
+<tr>
+<td><code>internal/runner</code></td>
+<td>local, SSH, exec, <code>pct</code> and guest agent transports</td>
+</tr>
+<tr>
+<td><code>internal/wgconf</code></td>
+<td>rendering, parsing and comparing <code>wg-quick</code> configs</td>
+</tr>
+<tr>
+<td><code>internal/state</code></td>
+<td><code>wglink.state.json</code></td>
+</tr>
+<tr>
+<td><code>internal/tui</code></td>
+<td>the <code>wglink ui</code> dashboard</td>
+</tr>
+</tbody>
+</table>
+<h2 id="roadmap">Roadmap</h2>
+<p>Ideas for later:</p>
+<ul>
+<li>Removing nodes and leaving networks from the dashboard.</li>
+</ul>
+<p>See <a href="https://github.com/gureetk/wglink/blob/main/CHANGELOG.md">CHANGELOG.md</a> for what each release added.</p>
+<h2 id="license">License</h2>
+<p><a href="https://github.com/gureetk/wglink/blob/main/LICENSE">MIT</a></p>
+
+<nav class="pager" aria-label="Previous and next pages">
+<a href="compared.html"><span>Previous</span>Compared with other tools</a>
+</nav>
+</main>
+</div>
+
+<footer class="foot">
+<div class="wrap">
+<span>wglink is MIT licensed. Built by <a href="https://github.com/gureetk">gureet</a>.</span>
+<nav aria-label="Project">
+<a href="https://github.com/gureetk/wglink">Source</a>
+<a href="https://github.com/gureetk/wglink/releases">Releases</a>
+<a href="https://github.com/gureetk/wglink/blob/main/CHANGELOG.md">Changelog</a>
+</nav>
+</div>
+</footer>
+
+</body>
+</html>

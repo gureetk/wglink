@@ -155,10 +155,10 @@ Apply these changes? [y/N] y
 Done.
 ```
 
-Then `wglink status` checks every pair, as shown at the top of this page.
-After that, change `wglink.yaml` with commands or by hand, and run `plan` and
-`apply` again. For example, giving `pi` a fixed address restarts only `pi`'s
-interface:
+Then `wglink status` checks every pair; [Status](#status) says what it
+reports. After that, change `wglink.yaml` with commands or by hand, and run
+`plan` and `apply` again. For example, giving `pi` a fixed address restarts
+only `pi`'s interface:
 
 ```console
 $ wglink ip lab pi .50
@@ -300,10 +300,49 @@ nodes. `wglink rotate` replaces a member's preshared keys along with its key
 pair. For a phone, each `wglink export` makes new keys: its peers store
 theirs, and the config carries the phone's.
 
+## Rotating keys
+
+`wglink rotate` makes new key pairs on the members themselves and gives the
+new public keys to their peers:
+
+```sh
+wglink rotate lab          # every member of lab that wglink reaches
+wglink rotate lab nas pi   # only these
+```
+
+Like `apply`, it shows the plan and asks before changing anything. Members
+load their new keys live. In a network with preshared keys, a rotated member
+also gets a new one for each of its pairs. If a rotation stops partway, the
+next `plan` finds the configs and interfaces still on an old key, and
+`apply` finishes the job.
+
+A manual node's private key is only on the device, so it gets a new pair
+from `wglink export lab phone --new-key`. Load that config on the device,
+then run `wglink apply` so its peers take the new public key.
+
+## Removing nodes and networks
+
+`apply` also takes away what `wglink.yaml` no longer has. On each node it
+stops the interfaces that wglink wrote and that aren't wanted any more, and
+deletes their configs and keys:
+
+```sh
+wglink net leave lab pi    # pi loses wg-lab, and the others drop it as a peer
+wglink net rm road         # every member loses wg-road
+wglink apply
+```
+
+Take a node out of its networks and apply before `wglink node rm`, since
+wglink can't reach a node once it's out of the inventory. If the node is
+removed first, `plan` names the interfaces left on it, to delete by hand.
+wglink never removes a config it didn't write.
+
 ## The inventory
 
-The commands above edit `wglink.yaml` for you, keeping its comments and
-layout. You can also edit it by hand. A typical file:
+Commands such as `wglink node add` and `wglink connect` edit `wglink.yaml`
+for you, keeping its comments and layout. You can also edit it by hand.
+wglink looks for it in the directory given by `--dir` or `$WGLINK_DIR`, or
+else in the current directory, then `~/.config/wglink`. A typical file:
 
 ```yaml
 version: 1
@@ -338,8 +377,24 @@ networks:
     members: [laptop, nas]
 ```
 
+Each node is reached one way, with `ssh`, `local`, `exec`, `pct`, `qm` or
+`manual`; see [Reaching machines](#reaching-machines) and
+[Phones and other devices](#phones-and-other-devices). Its other settings
+are optional:
+
+| Setting | Default | |
+| --- | --- | --- |
+| `sudo` | off | become root with `sudo -n`, on `ssh` and `local` nodes |
+| `endpoint` | for `ssh` nodes, the host SSH connects to | address peers dial: a host, with `:port` if it isn't the network's, or `none` |
+| `keepalive` | the network's | seconds between keepalives to its peers, for a node behind NAT |
+| `service` | `auto` | how tunnels start: `systemd` uses `wg-quick@IFACE`, so they come back after a reboot; `none` runs `wg-quick` alone; `auto` picks systemd where it runs |
+
 Each network becomes one WireGuard interface on each member (`wg-lab` here)
-with every other member as a peer. A node can be in several networks.
+with every other member as a peer. A node can be in several networks. A
+network's members are a list of node names, or a map from each name to its
+address: `auto`, a host part such as `".10"`, or a full address. A member
+that routes subnets is written `nas: {ip: ".10", routes: [192.168.50.0/24]}`,
+where `ip` can be left out.
 
 Network settings, all optional:
 
@@ -517,8 +572,10 @@ builds them on every pull request and installs them on Debian and Fedora. To
 redo a release, run the workflow with **replace** ticked. It removes the old
 release and tag only after the new build passes.
 
-The website is plain HTML and CSS in `site/`. The **pages** workflow
-publishes it with GitHub Pages whenever it changes on `main`.
+The website is plain HTML and CSS in `site/`. Its docs pages are made from
+this README and the commands' help by `go -C scripts/docgen run .`, and CI
+fails if they're out of date. The **pages** workflow publishes the site with
+GitHub Pages whenever it changes on `main`.
 
 | Package | Role |
 | --- | --- |

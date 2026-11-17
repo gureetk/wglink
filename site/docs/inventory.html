@@ -1,0 +1,223 @@
+<!doctype html>
+<!-- Made by scripts/docgen from README.md and wglink's help. Edit those, not this file. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The inventory · wglink docs</title>
+<meta name="description" content="Commands such as wglink node add and wglink connect edit wglink.yaml for you, keeping its comments and layout. You can also edit it by hand.">
+<meta name="color-scheme" content="light dark">
+<link rel="icon" href="../favicon.svg" type="image/svg+xml">
+<script>try{var t=localStorage.getItem("theme");if(t==="light"||t==="dark")document.documentElement.dataset.theme=t}catch(e){}</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=JetBrains+Mono:wght@400;600&amp;family=Space+Grotesk:wght@500;600;700&amp;display=swap">
+<link rel="stylesheet" href="../style.css">
+<script src="../site.js" defer></script>
+</head>
+<body>
+
+<header class="top docs-top">
+<div class="wrap">
+<a class="brand" href="../"><span class="dot" aria-hidden="true"></span>wglink <span class="sub">docs</span></a>
+<nav class="nav" aria-label="Main">
+<a class="button" href="https://github.com/gureetk/wglink">GitHub</a>
+<button class="button theme-toggle" type="button" aria-label="Switch theme">
+<svg class="moon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+<svg class="sun" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
+</button>
+</nav>
+</div>
+</header>
+
+<div class="wrap docs">
+<nav class="sidebar" aria-label="Docs">
+<div>
+<p>Getting started</p>
+<a href="./">Overview</a>
+<a href="install.html">Install</a>
+<a href="quick-start.html">Quick start</a>
+<a href="inventory.html" aria-current="page">The inventory</a>
+</div>
+<div>
+<p>Guides</p>
+<a href="reaching-machines.html">Reaching machines</a>
+<a href="phones.html">Phones and other devices</a>
+<a href="hub-and-spoke.html">Hub and spoke</a>
+<a href="routed-subnets.html">Routed subnets</a>
+<a href="ipv6.html">IPv6</a>
+<a href="preshared-keys.html">Preshared keys</a>
+<a href="rotating-keys.html">Rotating keys</a>
+<a href="removing.html">Removing nodes and networks</a>
+<a href="dashboard.html">Dashboard</a>
+</div>
+<div>
+<p>Reference</p>
+<a href="commands.html">Commands</a>
+<a href="status.html">Status</a>
+<a href="how-it-works.html">How it works</a>
+<a href="security.html">Security</a>
+<a href="compared.html">Compared with other tools</a>
+</div>
+<div>
+<p>Project</p>
+<a href="development.html">Development</a>
+</div>
+</nav>
+
+<main class="article">
+<h1>The inventory</h1>
+<p>Commands such as <code>wglink node add</code> and <code>wglink connect</code> edit <code>wglink.yaml</code>
+for you, keeping its comments and layout. You can also edit it by hand.
+wglink looks for it in the directory given by <code>--dir</code> or <code>$WGLINK_DIR</code>, or
+else in the current directory, then <code>~/.config/wglink</code>. A typical file:</p>
+<pre><code class="language-yaml">version: 1
+
+defaults:
+  pool: 10.99.0.0/16 # automatic subnets come from here
+  prefix: 24 # size of each automatic subnet
+  port: 51820 # first listen port tried
+
+nodes:
+  pve1:
+    ssh: root@192.168.1.10
+  nas:
+    ssh: admin@nas.lan
+    sudo: true
+    endpoint: 192.168.1.20
+  ct101:
+    pct: {via: pve1, vmid: 101}
+    endpoint: 192.168.1.101
+  laptop:
+    local: true
+    endpoint: none
+    keepalive: 25
+
+networks:
+  lab:
+    members:
+      pve1: auto
+      nas: &quot;.10&quot; # pinned: host 10 of the subnet
+      ct101: auto
+  laptop-nas:
+    members: [laptop, nas]
+</code></pre>
+<p>Each node is reached one way, with <code>ssh</code>, <code>local</code>, <code>exec</code>, <code>pct</code>, <code>qm</code> or
+<code>manual</code>; see <a href="reaching-machines.html">Reaching machines</a> and
+<a href="phones.html">Phones and other devices</a>. Its other settings
+are optional:</p>
+<table>
+<thead>
+<tr>
+<th>Setting</th>
+<th>Default</th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>sudo</code></td>
+<td>off</td>
+<td>become root with <code>sudo -n</code>, on <code>ssh</code> and <code>local</code> nodes</td>
+</tr>
+<tr>
+<td><code>endpoint</code></td>
+<td>for <code>ssh</code> nodes, the host SSH connects to</td>
+<td>address peers dial: a host, with <code>:port</code> if it isn't the network's, or <code>none</code></td>
+</tr>
+<tr>
+<td><code>keepalive</code></td>
+<td>the network's</td>
+<td>seconds between keepalives to its peers, for a node behind NAT</td>
+</tr>
+<tr>
+<td><code>service</code></td>
+<td><code>auto</code></td>
+<td>how tunnels start: <code>systemd</code> uses <code>wg-quick@IFACE</code>, so they come back after a reboot; <code>none</code> runs <code>wg-quick</code> alone; <code>auto</code> picks systemd where it runs</td>
+</tr>
+</tbody>
+</table>
+<p>Each network becomes one WireGuard interface on each member (<code>wg-lab</code> here)
+with every other member as a peer. A node can be in several networks. A
+network's members are a list of node names, or a map from each name to its
+address: <code>auto</code>, a host part such as <code>&quot;.10&quot;</code>, or a full address. A member
+that routes subnets is written <code>nas: {ip: &quot;.10&quot;, routes: [192.168.50.0/24]}</code>,
+where <code>ip</code> can be left out.</p>
+<p>Network settings, all optional:</p>
+<table>
+<thead>
+<tr>
+<th>Setting</th>
+<th>Default</th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>subnet</code></td>
+<td>the first free <code>/24</code> in the pool</td>
+<td>IPv4 subnet for tunnel addresses</td>
+</tr>
+<tr>
+<td><code>port</code></td>
+<td>the first port from 51820 free on every member</td>
+<td>UDP listen port</td>
+</tr>
+<tr>
+<td><code>iface</code></td>
+<td><code>wg-NAME</code></td>
+<td>interface name</td>
+</tr>
+<tr>
+<td><code>mtu</code></td>
+<td>chosen by wg-quick</td>
+<td></td>
+</tr>
+<tr>
+<td><code>keepalive</code></td>
+<td>off</td>
+<td>seconds between keepalives, for members behind NAT</td>
+</tr>
+<tr>
+<td><code>hub</code></td>
+<td>none: a full mesh</td>
+<td>member the others connect through</td>
+</tr>
+<tr>
+<td><code>psk</code></td>
+<td>off</td>
+<td>a preshared key for each pair of peers</td>
+</tr>
+<tr>
+<td><code>ipv6</code></td>
+<td>off</td>
+<td><code>auto</code> for a random unique local /64, or a subnet</td>
+</tr>
+</tbody>
+</table>
+<p>What wglink picks is recorded in <code>wglink.state.json</code> next to the inventory, so
+addresses don't move when you add members later. The state file holds public
+keys, addresses and hashes, and no secrets. Keep both files together, for
+example in a private git repository. If the state file is lost,
+<code>wglink state rebuild</code> recovers it from the configs on the nodes.</p>
+
+<nav class="pager" aria-label="Previous and next pages">
+<a href="quick-start.html"><span>Previous</span>Quick start</a>
+<a class="next" href="reaching-machines.html"><span>Next</span>Reaching machines</a>
+</nav>
+</main>
+</div>
+
+<footer class="foot">
+<div class="wrap">
+<span>wglink is MIT licensed. Built by <a href="https://github.com/gureetk">gureet</a>.</span>
+<nav aria-label="Project">
+<a href="https://github.com/gureetk/wglink">Source</a>
+<a href="https://github.com/gureetk/wglink/releases">Releases</a>
+<a href="https://github.com/gureetk/wglink/blob/main/CHANGELOG.md">Changelog</a>
+</nav>
+</div>
+</footer>
+
+</body>
+</html>

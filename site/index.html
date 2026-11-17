@@ -42,7 +42,7 @@
 <p class="lead">List your machines in <code>wglink.yaml</code>, preview the change with <code>wglink plan</code>, and make it with <code>wglink apply</code>. Private keys are made on the machines that use them and never leave.</p>
 <div class="actions">
 <a class="button primary" href="#install">Install v0.4.0</a>
-<a class="button" href="docs/">Read the quick start</a>
+<a class="button" href="docs/quick-start.html">Read the quick start</a>
 </div>
 <p class="fine">One static binary · no agent · no server · no account · MIT</p>
 </div>
@@ -99,6 +99,7 @@ All 3 links are ok.</pre>
 <li><strong>Apply</strong><span>Configs travel without private keys; each node inserts its own and loads the change.</span></li>
 <li><strong>Confirm</strong><span>A fresh SSH connection cancels the node's revert timer, or the node undoes the change.</span></li>
 </ol>
+<p class="more"><a href="docs/how-it-works.html">More on how it works <span aria-hidden="true">→</span></a></p>
 </div>
 </section>
 
@@ -108,6 +109,7 @@ All 3 links are ok.</pre>
 <h2>A dashboard in your terminal</h2>
 <p><code>wglink ui</code> shows every network and the health of its links, checked again every 10 seconds.</p>
 <p>Add a node, connect it, review the plan and apply it, without leaving the screen.</p>
+<p class="more"><a href="docs/dashboard.html">Using the dashboard <span aria-hidden="true">→</span></a></p>
 </div>
 <div class="term">
 <pre><b>wglink</b>  <span class="t-dim">~/infra/wglink.yaml  checked 12:04:05</span>
@@ -136,6 +138,7 @@ All 3 links are ok.</pre>
 <li><strong>Nothing to inject into</strong><span>Scripts go to <code>sh</code> over stdin; their only inputs are a few validated, quoted variables.</span></li>
 <li><strong>Tested on real WireGuard</strong><span>CI builds networks in Linux namespaces, and fails if a key ever shows up in a script's output.</span></li>
 </ul>
+<p class="more"><a href="docs/security.html">Read the security notes <span aria-hidden="true">→</span></a></p>
 </div>
 </section>
 
