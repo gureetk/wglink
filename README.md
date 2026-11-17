@@ -156,9 +156,9 @@ Done.
 ```
 
 Then `wglink status` checks every pair; [Status](#status) says what it
-reports. After that, change `wglink.yaml` with commands or by hand, and run `plan` and
-`apply` again. For example, giving `pi` a fixed address restarts only `pi`'s
-interface:
+reports. After that, change `wglink.yaml` with commands or by hand, and run
+`plan` and `apply` again. For example, giving `pi` a fixed address restarts
+only `pi`'s interface:
 
 ```console
 $ wglink ip lab pi .50
@@ -333,9 +333,9 @@ wglink apply
 ```
 
 Take a node out of its networks and apply before `wglink node rm`, since
-wglink can't reach a node once it's out of the inventory. If it goes first,
-`plan` names the interfaces left on it to delete by hand. wglink never
-removes a config it didn't write.
+wglink can't reach a node once it's out of the inventory. If the node is
+removed first, `plan` names the interfaces left on it, to delete by hand.
+wglink never removes a config it didn't write.
 
 ## The inventory
 

@@ -75,9 +75,9 @@ wglink net rm road         # every member loses wg-road
 wglink apply
 </code></pre>
 <p>Take a node out of its networks and apply before <code>wglink node rm</code>, since
-wglink can't reach a node once it's out of the inventory. If it goes first,
-<code>plan</code> names the interfaces left on it to delete by hand. wglink never
-removes a config it didn't write.</p>
+wglink can't reach a node once it's out of the inventory. If the node is
+removed first, <code>plan</code> names the interfaces left on it, to delete by hand.
+wglink never removes a config it didn't write.</p>
 
 <nav class="pager" aria-label="Previous and next pages">
 <a href="rotating-keys.html"><span>Previous</span>Rotating keys</a>
