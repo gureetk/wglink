@@ -81,7 +81,7 @@ sudo dnf install "./wglink-${VERSION}-1.x86_64.rpm"
 Or download the archive for Linux on amd64, arm64 or armv7:
 
 ```sh
-VERSION=0.3.0 ARCH=amd64
+VERSION=0.4.0 ARCH=amd64
 curl -fsSLO "https://github.com/gureetk/wglink/releases/download/v$VERSION/wglink_${VERSION}_linux_$ARCH.tar.gz"
 curl -fsSLO "https://github.com/gureetk/wglink/releases/download/v$VERSION/SHA256SUMS"
 sha256sum --check --ignore-missing SHA256SUMS
