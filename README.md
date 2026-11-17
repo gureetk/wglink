@@ -67,7 +67,7 @@ All 3 links are ok.
 Download a release for Linux on amd64, arm64 or armv7:
 
 ```sh
-VERSION=0.2.0 ARCH=amd64
+VERSION=0.3.0 ARCH=amd64
 curl -fsSLO "https://github.com/gureetk/wglink/releases/download/v$VERSION/wglink_${VERSION}_linux_$ARCH.tar.gz"
 curl -fsSLO "https://github.com/gureetk/wglink/releases/download/v$VERSION/SHA256SUMS"
 sha256sum --check --ignore-missing SHA256SUMS
