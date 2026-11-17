@@ -59,7 +59,9 @@ jobs:
       - name: test
         run: go test -count=1 ./...
       - name: build
-        run: scripts/release.sh "$TAG"
+        run: |
+          go install github.com/goreleaser/nfpm/v2/cmd/nfpm@v2.48.0
+          scripts/release.sh "$TAG"
       - name: publish
         env:
           GH_TOKEN: ${{ github.token }}
@@ -91,11 +93,11 @@ jobs:
           fi
           if [ "$existing" = true ]; then
             # Someone made the release on the website; add the files to it.
-            gh release upload "$TAG" --clobber dist/*.tar.gz dist/SHA256SUMS
+            gh release upload "$TAG" --clobber dist/*.tar.gz dist/*.deb dist/*.rpm dist/SHA256SUMS
           else
             gh release create "$TAG" --target "$sha" \
               --title "wglink $TAG" --notes-file dist/NOTES.md \
-              dist/*.tar.gz dist/SHA256SUMS
+              dist/*.tar.gz dist/*.deb dist/*.rpm dist/SHA256SUMS
           fi
           # The published tag must be the commit that was built.
           got=$(tag_commit)

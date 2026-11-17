@@ -64,7 +64,21 @@ All 3 links are ok.
 
 ## Install
 
-Download a release for Linux on amd64, arm64 or armv7:
+From v0.4.0, each release has `.deb` and `.rpm` packages for amd64, arm64
+and armv7. They install shell completions for bash, zsh and fish, and
+recommend `openssh-client` and `wireguard-tools`:
+
+```sh
+VERSION=0.4.0
+# Debian, Ubuntu and relatives: amd64, arm64 or armhf
+curl -fsSLO "https://github.com/gureetk/wglink/releases/download/v$VERSION/wglink_${VERSION}-1_amd64.deb"
+sudo apt install "./wglink_${VERSION}-1_amd64.deb"
+# Fedora, RHEL and relatives: x86_64, aarch64 or armv7hl
+curl -fsSLO "https://github.com/gureetk/wglink/releases/download/v$VERSION/wglink-${VERSION}-1.x86_64.rpm"
+sudo dnf install "./wglink-${VERSION}-1.x86_64.rpm"
+```
+
+Or download the archive for Linux on amd64, arm64 or armv7:
 
 ```sh
 VERSION=0.3.0 ARCH=amd64
@@ -497,8 +511,11 @@ CI runs them on every pull request, with the runner itself as a systemd node.
 To release, add the version's section to `CHANGELOG.md`, then push a `vX.Y.Z`
 tag, or run the **release** workflow from the Actions tab with the version
 (and, optionally, a commit). Either way it tests, builds the archives and
-publishes them. To redo a release, run the workflow with **replace** ticked.
-It removes the old release and tag only after the new build passes.
+packages with `scripts/release.sh`, and publishes them. The packages come
+from [nfpm](https://nfpm.goreleaser.com/) and `packaging/nfpm.yaml`; CI
+builds them on every pull request and installs them on Debian and Fedora. To
+redo a release, run the workflow with **replace** ticked. It removes the old
+release and tag only after the new build passes.
 
 | Package | Role |
 | --- | --- |

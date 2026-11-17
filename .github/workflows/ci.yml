@@ -100,3 +100,33 @@ jobs:
           echo "::notice title=integration lab::$(grep -m 1 -o 'addresses: .*' test.log || echo 'no lab started')"
           echo "::notice title=skipped tests::$(grep -o -- '--- SKIP: [^ ]*' test.log | cut -d ' ' -f 3 | paste -sd ' ' - | grep . || echo none)"
           exit "$status"
+
+  packages:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: stable
+      - name: build
+        run: |
+          go install github.com/goreleaser/nfpm/v2/cmd/nfpm@v2.48.0
+          SNAPSHOT=1 scripts/release.sh v0.0.0
+      # Install each package with its recommended dependencies, as users would.
+      - name: install on Debian
+        run: |
+          docker run --rm -v "$PWD/dist:/dist:ro" debian:stable-slim sh -ec '
+            apt-get update -qq
+            apt-get install -y -qq /dist/wglink_0.0.0-1_amd64.deb >/dev/null
+            wglink version
+            dpkg -L wglink | grep -qx /usr/share/bash-completion/completions/wglink
+            command -v wg && command -v ssh'
+      - name: install on Fedora
+        run: |
+          docker run --rm -v "$PWD/dist:/dist:ro" fedora:latest sh -ec '
+            dnf install -y -q /dist/wglink-0.0.0-1.x86_64.rpm
+            wglink version
+            rpm -ql wglink | grep -qx /usr/share/zsh/site-functions/_wglink
+            command -v wg && command -v ssh'

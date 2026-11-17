@@ -4,6 +4,16 @@ Notable changes to wglink. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- `.deb` and `.rpm` packages on each release, for amd64, arm64 and armv7.
+  They install shell completions for bash, zsh and fish, and recommend
+  `openssh-client` and `wireguard-tools`. CI installs them on Debian and
+  Fedora before a release can ship them.
+- Release archives include the shell completions too.
+
 ## [0.3.0] - 2026-11-17
 
 Build networks from the dashboard: add nodes and connect them there, then
