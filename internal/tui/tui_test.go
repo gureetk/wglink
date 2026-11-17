@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"net/netip"
+	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"testing"
@@ -11,19 +13,32 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/gureetk/wglink/internal/config"
 	"github.com/gureetk/wglink/internal/engine"
 )
 
-// fake is a Backend with canned answers.
+// fake is a Backend with canned status and plans, and a real inventory in a
+// temporary directory for the forms.
 type fake struct {
+	Backend
 	report  *engine.Report
 	plan    *engine.Plan
+	planned []string
 	applied []string
+}
+
+func newFake(t *testing.T, yaml string) *fake {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, config.FileName), []byte(yaml), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return &fake{Backend: Engine(dir), report: &engine.Report{}}
 }
 
 func (f *fake) Status(context.Context) (*engine.Report, error) { return f.report, nil }
 
 func (f *fake) Plan(_ context.Context, network string) (*Planned, error) {
+	f.planned = append(f.planned, network)
 	if f.plan == nil {
 		return nil, errors.New("no such network")
 	}
@@ -168,5 +183,139 @@ func TestPlanAndApply(t *testing.T) {
 	m = run(t, m, cmd)
 	if out := text(m); !strings.Contains(out, "Couldn't plan lab: no such network") {
 		t.Errorf("failed plan:\n%s", out)
+	}
+}
+
+const inventory = `version: 1
+nodes:
+  pve1: {ssh: root@pve1}
+  nas: {ssh: admin@nas}
+  vps: {ssh: root@vps}
+networks:
+  lab: {members: [pve1, nas]}
+`
+
+// typeText types s into the focused field.
+func typeText(m tea.Model, s string) tea.Model {
+	for _, r := range s {
+		m, _ = m.Update(char(r))
+	}
+	return m
+}
+
+func key(code rune) tea.KeyPressMsg { return tea.KeyPressMsg{Code: code} }
+
+func TestAddNodeForm(t *testing.T) {
+	f := newFake(t, inventory)
+	var m tea.Model = New(context.Background(), f, "x", time.Minute, false)
+	m, _ = m.Update(statusMsg{r: f.report, at: time.Now()})
+	if !strings.Contains(text(m), "Press n to add a node") {
+		t.Errorf("empty dashboard:\n%s", text(m))
+	}
+	m, cmd := press(t, m, char('n'))
+	m = run(t, m, cmd)
+	if out := text(m); !strings.Contains(out, "Add a node") || !strings.Contains(out, "‹ ssh ›") || strings.Contains(out, "VM ID") {
+		t.Fatalf("form:\n%s", out)
+	}
+	m = typeText(m, "ct101")
+	m, _ = press(t, m, key(tea.KeyTab))
+	m, _ = press(t, m, key(tea.KeyRight))
+	m, _ = press(t, m, key(tea.KeyRight))
+	if out := text(m); !strings.Contains(out, "‹ pct ›") || !strings.Contains(out, "VM ID") || strings.Contains(out, "SSH  ") {
+		t.Errorf("after picking pct:\n%s", out)
+	}
+	m, _ = press(t, m, key(tea.KeyTab))
+	m = typeText(m, "101")
+	m, _ = press(t, m, key(tea.KeyTab)) // the host: nas, the first that can host it
+	m, _ = press(t, m, key(tea.KeyRight))
+	m, _ = press(t, m, key(tea.KeyTab))
+	m = typeText(m, "192.168.1.101")
+	m, cmd = press(t, m, key(tea.KeyEnter))
+	m = run(t, m, cmd)
+	if out := text(m); m.(Model).screen != dashboard || !strings.Contains(out, "Added node ct101. Press c to connect it") {
+		t.Errorf("after adding:\n%s", out)
+	}
+	inv, _ := f.Inventory()
+	if n := inv.Nodes["ct101"]; n == nil || n.PCT == nil || n.PCT.VMID != 101 || n.PCT.Via != "pve1" || n.Endpoint.String() != "192.168.1.101" {
+		t.Errorf("ct101 = %+v", n)
+	}
+
+	// Mistakes stay in the form, with what's wrong.
+	m, cmd = press(t, m, char('n'))
+	m = run(t, m, cmd)
+	m = typeText(m, "nas")
+	m, _ = press(t, m, key(tea.KeyEnter))
+	if !strings.Contains(text(m), "Say where to SSH to") {
+		t.Errorf("no SSH destination:\n%s", text(m))
+	}
+	m, _ = press(t, m, key(tea.KeyTab))
+	m, _ = press(t, m, key(tea.KeyTab))
+	m = typeText(m, "admin@nas2")
+	m, cmd = press(t, m, key(tea.KeyEnter))
+	m = run(t, m, cmd)
+	if out := text(m); m.(Model).screen != addingNode || !strings.Contains(out, "node nas already exists") {
+		t.Errorf("duplicate name:\n%s", out)
+	}
+	m, _ = press(t, m, key(tea.KeyEscape))
+	if m.(Model).screen != dashboard {
+		t.Error("esc didn't close the form")
+	}
+}
+
+func TestConnectForm(t *testing.T) {
+	f := newFake(t, inventory)
+	f.plan = &engine.Plan{}
+	var m tea.Model = New(context.Background(), f, "x", time.Minute, false)
+	m, _ = m.Update(statusMsg{r: f.report, at: time.Now()})
+	m, cmd := press(t, m, char('c'))
+	m = run(t, m, cmd)
+	if out := text(m); !strings.Contains(out, "Connect nodes") || !strings.Contains(out, "[ ] vps") || !strings.Contains(out, "Preshared") {
+		t.Fatalf("form:\n%s", out)
+	}
+	// Fields: network, then nas, pve1 and vps, then hub, IPv6 and preshared keys.
+	m, _ = press(t, m, key(tea.KeyTab))
+	m, _ = press(t, m, key(tea.KeySpace))
+	m, _ = press(t, m, key(tea.KeyTab))
+	m, _ = press(t, m, key(tea.KeyTab))
+	m, _ = press(t, m, key(tea.KeySpace))
+	for range 3 {
+		m, _ = press(t, m, key(tea.KeyTab))
+	}
+	m, _ = press(t, m, key(tea.KeySpace))
+	m, cmd = press(t, m, key(tea.KeyEnter))
+	m, cmd = m.Update(cmd()) // connected, so it plans the network
+	if !strings.Contains(text(m), "Planning nas-vps") {
+		t.Errorf("after connecting:\n%s", text(m))
+	}
+	m = run(t, m, cmd)
+	if m.(Model).screen != reviewing || strings.Join(f.planned, ",") != "nas-vps" {
+		t.Fatalf("after planning: screen %d, planned %v\n%s", m.(Model).screen, f.planned, text(m))
+	}
+	inv, _ := f.Inventory()
+	if n := inv.Networks["nas-vps"]; n == nil || !n.PSK || len(n.Members) != 2 {
+		t.Errorf("nas-vps = %+v", n)
+	}
+
+	// Naming a network there is joins it, and leaves its settings alone.
+	m, _ = press(t, m, key(tea.KeyEscape))
+	m, cmd = press(t, m, char('c'))
+	m = run(t, m, cmd)
+	m = typeText(m, "lab")
+	if out := text(m); !strings.Contains(out, "joining lab; its settings stay") || strings.Contains(out, "Preshared") {
+		t.Errorf("joining:\n%s", out)
+	}
+	m, _ = press(t, m, key(tea.KeyEnter))
+	if !strings.Contains(text(m), "Check the nodes to connect") {
+		t.Errorf("nothing checked:\n%s", text(m))
+	}
+	for range 3 {
+		m, _ = press(t, m, key(tea.KeyTab))
+	}
+	m, _ = press(t, m, key(tea.KeySpace))
+	m, cmd = press(t, m, key(tea.KeyEnter))
+	run(t, m, cmd)
+	inv, _ = f.Inventory()
+	if _, ok := inv.Networks["lab"].Member("vps"); !ok || inv.Networks["lab"].PSK {
+		t.Errorf("lab = %+v", inv.Networks["lab"])
 	}
 }

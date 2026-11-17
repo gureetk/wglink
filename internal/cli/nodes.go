@@ -10,6 +10,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/gureetk/wglink/internal/config"
+	"github.com/gureetk/wglink/internal/edit"
 	"github.com/gureetk/wglink/internal/engine"
 	"github.com/gureetk/wglink/internal/wgconf"
 )
@@ -44,67 +45,28 @@ func (a *app) newNodeAddCmd() *cobra.Command {
 		Args: exactArgs(1, "a node name"),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			name := args[0]
-			if !config.ValidNodeName(name) {
-				return fmt.Errorf("%q: use lowercase letters, digits and hyphens, starting with a letter", name)
+			// Flag mix-ups first, in terms of flags.
+			switch {
+			case f.ssh == "" && !f.local && f.exec == "" && f.pct == 0 && f.qm == 0 && !f.manual:
+				return errors.New("say how to reach it: --ssh, --local, --exec, --pct, --qm or --manual")
+			case (f.pct != 0 || f.qm != 0) && f.via == "":
+				return fmt.Errorf("--%s needs --via, the Proxmox host's node name", map[bool]string{true: "pct", false: "qm"}[f.pct != 0])
+			case f.via != "" && f.pct == 0 && f.qm == 0:
+				return errors.New("--via goes with --pct or --qm")
+			case f.pubkey != "" && !f.manual:
+				return errors.New("--pubkey goes with --manual")
+			case f.pubkey != "" && !wgconf.ValidKey(f.pubkey):
+				return fmt.Errorf("--pubkey: %q isn't a WireGuard public key", f.pubkey)
 			}
 			i, err := a.open()
 			if err != nil {
 				return err
 			}
-			if _, ok := i.inv.Nodes[name]; ok {
-				return fmt.Errorf("node %s already exists; remove it first or edit %s", name, i.path)
+			n := edit.Node{
+				SSH: f.ssh, Local: f.local, Exec: strings.Fields(f.exec), PCT: f.pct, QM: f.qm, Via: f.via,
+				Manual: f.manual, PubKey: f.pubkey, Sudo: f.sudo, Endpoint: f.endpoint, Keepalive: f.keepalive, Service: f.service,
 			}
-			var fields []config.Field
-			switch {
-			case f.ssh != "":
-				fields = append(fields, config.Field{Key: "ssh", Value: f.ssh})
-			case f.local:
-				fields = append(fields, config.Field{Key: "local", Value: true})
-			case f.exec != "":
-				fields = append(fields, config.Field{Key: "exec", Value: config.Flow{V: strings.Fields(f.exec)}})
-			case f.pct != 0 || f.qm != 0:
-				kind, vmid := "pct", f.pct
-				if f.qm != 0 {
-					kind, vmid = "qm", f.qm
-				}
-				if f.via == "" {
-					return fmt.Errorf("--%s needs --via, the Proxmox host's node name", kind)
-				}
-				fields = append(fields, config.Field{Key: kind, Value: config.Flow{V: map[string]any{"via": f.via, "vmid": vmid}}})
-			case f.manual:
-				m := map[string]any{}
-				if f.pubkey != "" {
-					if !wgconf.ValidKey(f.pubkey) {
-						return fmt.Errorf("--pubkey: %q isn't a WireGuard public key", f.pubkey)
-					}
-					m["pubkey"] = f.pubkey
-				}
-				fields = append(fields, config.Field{Key: "manual", Value: config.Flow{V: m}})
-				if f.endpoint == "" {
-					f.endpoint = "none"
-				}
-			default:
-				return errors.New("say how to reach it: --ssh, --local, --exec, --pct, --qm or --manual")
-			}
-			if f.pubkey != "" && !f.manual {
-				return errors.New("--pubkey goes with --manual")
-			}
-			if f.via != "" && f.pct == 0 && f.qm == 0 {
-				return errors.New("--via goes with --pct or --qm")
-			}
-			if f.sudo {
-				fields = append(fields, config.Field{Key: "sudo", Value: true})
-			}
-			if f.endpoint != "" {
-				fields = append(fields, config.Field{Key: "endpoint", Value: f.endpoint})
-			}
-			if f.keepalive != 0 {
-				fields = append(fields, config.Field{Key: "keepalive", Value: f.keepalive})
-			}
-			if f.service != "" {
-				fields = append(fields, config.Field{Key: "service", Value: f.service})
-			}
-			if err := i.doc.SetNode(name, fields...); err != nil {
+			if err := edit.AddNode(i.doc, i.inv, name, n); err != nil {
 				return err
 			}
 			if err := i.save(); err != nil {

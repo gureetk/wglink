@@ -3,14 +3,13 @@ package cli
 import (
 	"fmt"
 	"io"
-	"os"
-	"path/filepath"
 	"strings"
 	"text/tabwriter"
 
 	"github.com/spf13/cobra"
 
 	"github.com/gureetk/wglink/internal/config"
+	"github.com/gureetk/wglink/internal/edit"
 	"github.com/gureetk/wglink/internal/state"
 )
 
@@ -28,16 +27,7 @@ func (a *app) open() (*inventory, error) {
 	if err != nil {
 		return nil, err
 	}
-	path := filepath.Join(dir, config.FileName)
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil, err
-	}
-	inv, err := config.Parse(path, data)
-	if err != nil {
-		return nil, err
-	}
-	doc, err := config.ParseDoc(data)
+	path, doc, inv, err := edit.Load(dir)
 	if err != nil {
 		return nil, err
 	}

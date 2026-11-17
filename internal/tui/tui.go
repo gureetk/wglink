@@ -1,5 +1,6 @@
 // Package tui is wglink's terminal dashboard: the live state of every
-// network, with plan and apply a key away.
+// network, with plan and apply a key away, and forms to add nodes and
+// connect them.
 package tui
 
 import (
@@ -14,6 +15,8 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 
+	"github.com/gureetk/wglink/internal/config"
+	"github.com/gureetk/wglink/internal/edit"
 	"github.com/gureetk/wglink/internal/engine"
 )
 
@@ -21,6 +24,11 @@ import (
 type Backend interface {
 	Status(ctx context.Context) (*engine.Report, error)
 	Plan(ctx context.Context, network string) (*Planned, error)
+	// Inventory is wglink.yaml as it stands; AddNode and Connect change it
+	// as "wglink node add" and "wglink connect" do.
+	Inventory() (*config.Inventory, error)
+	AddNode(name string, n edit.Node) error
+	Connect(c edit.Connection) (string, error)
 }
 
 // Planned is a plan and the way to apply it.
@@ -55,6 +63,34 @@ func (dir engineBackend) Plan(ctx context.Context, network string) (*Planned, er
 	return &Planned{Plan: p, Apply: func(ctx context.Context, logf engine.Logf) error { return s.Apply(ctx, p, logf) }}, nil
 }
 
+func (dir engineBackend) Inventory() (*config.Inventory, error) {
+	_, _, inv, err := edit.Load(string(dir))
+	return inv, err
+}
+
+func (dir engineBackend) AddNode(name string, n edit.Node) error {
+	path, doc, inv, err := edit.Load(string(dir))
+	if err != nil {
+		return err
+	}
+	if err := edit.AddNode(doc, inv, name, n); err != nil {
+		return err
+	}
+	return doc.Save(path)
+}
+
+func (dir engineBackend) Connect(c edit.Connection) (string, error) {
+	path, doc, inv, err := edit.Load(string(dir))
+	if err != nil {
+		return "", err
+	}
+	name, err := edit.Connect(doc, inv, c)
+	if err != nil {
+		return "", err
+	}
+	return name, doc.Save(path)
+}
+
 type screen int
 
 const (
@@ -63,7 +99,9 @@ const (
 	reviewing         // a plan on screen
 	confirming        // asked whether to apply it
 	applying
-	done // what apply did, or why planning failed
+	done       // what apply did, or why planning failed
+	addingNode // the form for a new node
+	connecting // the form to join nodes in a network
 )
 
 // Model is the dashboard's state.
@@ -86,6 +124,8 @@ type Model struct {
 	network string // the one being planned or applied
 	plan    *Planned
 	failed  bool
+	form    *form
+	note    string // a line for the dashboard, until the next key
 	vp      viewport.Model
 	spin    spinner.Model
 }
@@ -184,8 +224,41 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			log = append(log, "", "Done.")
 		}
 		return m.finish(log, msg.err != nil), nil
+	case formMsg:
+		if msg.err != nil {
+			m.note = "Couldn't read the inventory: " + msg.err.Error()
+			return m, nil
+		}
+		m.screen = msg.screen
+		if m.screen == addingNode {
+			m.form = nodeForm(msg.inv)
+		} else {
+			m.form = connectForm(msg.inv)
+		}
+		return m, m.form.start()
+	case addedMsg:
+		if msg.err != nil {
+			m.form.err = msg.err.Error()
+			return m, nil
+		}
+		m.screen, m.form = dashboard, nil
+		m.note = "Added node " + msg.name + ". Press c to connect it to others."
+		return m, nil
+	case connectedMsg:
+		if msg.err != nil {
+			m.form.err = msg.err.Error()
+			return m, nil
+		}
+		m.form = nil
+		return m.planNetwork(msg.name)
 	case tea.KeyPressMsg:
+		if m.screen == addingNode || m.screen == connecting {
+			return m.formKey(msg)
+		}
 		return m.key(msg)
+	}
+	if m.form != nil {
+		return m, m.form.other(msg)
 	}
 	if m.screen == reviewing || m.screen == done {
 		var cmd tea.Cmd
@@ -218,6 +291,7 @@ func (m Model) key(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		if m.report != nil {
 			n = len(m.report.Networks)
 		}
+		m.note = ""
 		switch k {
 		case "q", "ctrl+c", "esc":
 			return m, tea.Quit
@@ -232,13 +306,12 @@ func (m Model) key(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			}
 		case "p", "enter":
 			if n > 0 {
-				m.screen, m.network = planning, m.report.Networks[m.sel].Name
-				be, ctx, name := m.be, m.ctx, m.network
-				return m, func() tea.Msg {
-					p, err := be.Plan(ctx, name)
-					return planMsg{p, err}
-				}
+				return m.planNetwork(m.report.Networks[m.sel].Name)
 			}
+		case "n":
+			return m, m.openForm(addingNode)
+		case "c":
+			return m, m.openForm(connecting)
 		}
 		return m, nil
 	case reviewing:
@@ -287,6 +360,16 @@ func (m Model) key(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+// planNetwork plans one network and shows the plan.
+func (m Model) planNetwork(name string) (Model, tea.Cmd) {
+	m.screen, m.network = planning, name
+	be, ctx := m.be, m.ctx
+	return m, func() tea.Msg {
+		p, err := be.Plan(ctx, name)
+		return planMsg{p, err}
+	}
+}
+
 func (m Model) canApply() bool {
 	return m.plan != nil && len(m.plan.Problems) == 0 && !m.plan.Empty()
 }
@@ -305,7 +388,10 @@ func (m Model) View() tea.View {
 	var body, help string
 	switch m.screen {
 	case dashboard:
-		body, help = m.dashboard(), "↑/↓ network · p plan · r check now · q quit"
+		body, help = m.dashboard(), "↑/↓ network · p plan · c connect nodes · n new node · r check now · q quit"
+		if m.note != "" {
+			help = m.note + "\n" + faint.Render(help)
+		}
 	case planning:
 		body, help = m.spin.View()+" Planning "+m.network+"…", "ctrl+c quit"
 	case reviewing:
@@ -324,6 +410,8 @@ func (m Model) View() tea.View {
 		body, help = m.spin.View()+" Applying "+m.network+"…", "Changes run to the end; nodes undo any they can't confirm."
 	case done:
 		body, help = m.vp.View(), "any key: back to the dashboard"
+	case addingNode, connecting:
+		body, help = m.form.view(), "enter "+m.form.submit+" · tab next field · ←/→ change · space check · esc cancel"
 	}
 	head := bold.Render("wglink") + "  " + faint.Render(m.title)
 	switch {
@@ -345,7 +433,7 @@ func (m Model) dashboard() string {
 	case m.report == nil:
 		return "Checking your networks…"
 	case len(m.report.Networks) == 0:
-		return "No networks yet. Connect two nodes with: wglink connect NODE NODE"
+		return "No networks yet. Press n to add a node, and c to connect nodes."
 	}
 	var list []string
 	for i, n := range m.report.Networks {

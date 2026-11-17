@@ -382,6 +382,13 @@ health of its links, checked again every 10 seconds (`--every` changes
 that). Pick a network with the arrow keys, press `p` to see its plan, and
 `a` to apply it after a confirmation, the same as `wglink apply`.
 
+You can build networks there too. `n` adds a node, reached over SSH, as a
+Proxmox container or VM, or as a phone. `c` connects nodes: check the ones
+to join, name a new network or one that exists, and pick a hub, IPv6 or
+preshared keys for a new one. The dashboard plans it next, so `a` applies
+it. Both forms change `wglink.yaml` the way `wglink node add` and
+`wglink connect` do.
+
 ```
 wglink  ~/infra/wglink.yaml  checked 12:04:05
 
@@ -396,7 +403,7 @@ NETWORKS       network lab   wg-lab   10.99.0.0/24   udp/51820
 
                All 3 links are ok.
 
-↑/↓ network · p plan · r check now · q quit
+↑/↓ network · p plan · c connect nodes · n new node · r check now · q quit
 ```
 
 ## How it works
@@ -498,6 +505,7 @@ It removes the old release and tag only after the new build passes.
 | `cmd/wglink` | entry point |
 | `internal/cli` | commands, flags and output |
 | `internal/config` | `wglink.yaml`: parsing, validation and comment-preserving edits |
+| `internal/edit` | adding nodes and connecting them, shared by the commands and the dashboard |
 | `internal/ipam` | subnet, port and address selection |
 | `internal/engine` | plan, apply and status |
 | `internal/node` | the embedded scripts and their parsers |
@@ -510,7 +518,7 @@ It removes the old release and tag only after the new build passes.
 
 Ideas for later:
 
-- Adding nodes and networks from the dashboard.
+- Removing nodes and leaving networks from the dashboard.
 
 See [CHANGELOG.md](CHANGELOG.md) for what each release added.
 

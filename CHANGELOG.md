@@ -4,6 +4,20 @@ Notable changes to wglink. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- The dashboard adds nodes and connects them. `n` opens a form for a new
+  node, and `c` one that joins checked nodes in a new or existing network,
+  then shows its plan to apply. Both make the same changes as
+  `wglink node add` and `wglink connect`.
+
+### Fixed
+
+- `wglink connect` and `wglink net join` no longer reset the pinned
+  address of a node that is already a member.
+
 ## [0.2.0] - 2026-11-16
 
 Reach more machines and shape networks more ways: Proxmox VMs, phones, hubs,
