@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Quick start · wglink docs</title>
+<meta name="description" content="Connect three Linux machines over WireGuard with wglink in a few commands.">
+<meta name="color-scheme" content="light dark">
+<link rel="icon" href="../favicon.svg" type="image/svg+xml">
+<script>try{var t=localStorage.getItem("theme");if(t==="light"||t==="dark")document.documentElement.dataset.theme=t}catch(e){}</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=JetBrains+Mono:wght@400;600&amp;family=Space+Grotesk:wght@500;600;700&amp;display=swap">
+<link rel="stylesheet" href="../style.css">
+<script src="../site.js" defer></script>
+</head>
+<body>
+
+<header class="top docs-top">
+<div class="wrap">
+<a class="brand" href="../"><span class="dot" aria-hidden="true"></span>wglink <span class="sub">docs</span></a>
+<nav class="nav" aria-label="Main">
+<span class="mono" style="font-size: 13px; color: var(--muted)">v0.4.0</span>
+<a class="button" href="https://github.com/gureetk/wglink">GitHub</a>
+<button class="button theme-toggle" type="button" aria-label="Switch theme">
+<svg class="moon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+<svg class="sun" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
+</button>
+</nav>
+</div>
+</header>
+
+<div class="wrap docs">
+<nav class="sidebar" aria-label="Docs">
+<div>
+<p>Getting started</p>
+<a href="../#install">Install</a>
+<a href="./" aria-current="page">Quick start</a>
+<a href="https://github.com/gureetk/wglink#the-inventory">The inventory</a>
+</div>
+<div>
+<p>Guides</p>
+<a href="https://github.com/gureetk/wglink#reaching-machines">Reaching machines</a>
+<a href="https://github.com/gureetk/wglink#phones-and-other-devices">Phones and other devices</a>
+<a href="https://github.com/gureetk/wglink#hub-and-spoke">Hub and spoke</a>
+<a href="https://github.com/gureetk/wglink#routed-subnets">Routed subnets</a>
+<a href="https://github.com/gureetk/wglink#ipv6">IPv6</a>
+<a href="https://github.com/gureetk/wglink#preshared-keys">Preshared keys</a>
+<a href="https://github.com/gureetk/wglink#dashboard">Dashboard</a>
+</div>
+<div>
+<p>Reference</p>
+<a href="https://github.com/gureetk/wglink#status">Status</a>
+<a href="https://github.com/gureetk/wglink#how-it-works">How it works</a>
+<a href="https://github.com/gureetk/wglink#security">Security</a>
+</div>
+</nav>
+
+<main class="article">
+<h1>Quick start</h1>
+<p class="lead">Connect three machines in a few commands. wglink runs on one machine, the controller, which can be one of the nodes too.</p>
+
+<h2>1. Describe the machines</h2>
+<p>Create <code>wglink.yaml</code>, add each machine, and put them in a network.</p>
+<div class="term"><pre>wglink init                                <span class="t-dim"># writes wglink.yaml here</span>
+wglink node add pve1 --ssh root@192.168.1.10
+wglink node add nas  --ssh admin@192.168.1.20 --sudo
+wglink node add pi   --ssh pi@192.168.1.30 --sudo
+wglink connect pve1 nas pi --name lab</pre></div>
+<p><code>node add</code> connects once to check the machine and tells you if anything is missing.</p>
+
+<h2>2. Preview the change</h2>
+<p><code>plan</code> connects to every node, works out addresses and shows what would change. Nothing is changed yet.</p>
+<div class="term"><pre><span class="t-dim">$</span> wglink plan
+network lab   wg-lab   10.99.0.0/24   udp/51820
+  <span class="t-ok">+</span> pve1  10.99.0.1       new interface, 2 peers, new key
+  <span class="t-ok">+</span> nas   10.99.0.2       new interface, 2 peers, new key
+  <span class="t-ok">+</span> pi    10.99.0.3       new interface, 2 peers, new key
+
+3 to create, 0 to change live, 0 to restart, 0 to remove.</pre></div>
+
+<h2>3. Apply it and check</h2>
+<p><code>apply</code> shows the same plan, asks for confirmation, then makes the change. <code>status</code> checks each tunnel.</p>
+<div class="term"><pre><span class="t-dim">$</span> wglink status
+  pve1 &lt;-&gt; nas  <span class="t-ok">ok</span>  handshake 14s ago, ping 0.4 ms
+  pve1 &lt;-&gt; pi   <span class="t-ok">ok</span>  idle, ping 1.1 ms
+  nas &lt;-&gt; pi    <span class="t-ok">ok</span>  handshake 1m ago, ping 0.9 ms
+
+All 3 links are ok.</pre></div>
+
+<div class="note">
+<strong>Every node needs</strong>
+<ul>
+<li>Linux with <code>sh</code>, <code>ip</code> and <code>wireguard-tools</code>.</li>
+<li>Root, or passwordless <code>sudo</code> for the user wglink connects as.</li>
+<li>The WireGuard kernel module (Linux 5.6 and later) or <code>wireguard-go</code>.</li>
+</ul>
+</div>
+
+<nav class="pager" aria-label="Next and previous">
+<a href="../#install"><span>Previous</span>Install</a>
+<a href="https://github.com/gureetk/wglink#the-inventory"><span>Next</span>The inventory</a>
+</nav>
+</main>
+</div>
+
+<footer class="foot">
+<div class="wrap">
+<span>wglink is MIT licensed. Built by <a href="https://github.com/gureetk">gureet</a>.</span>
+<nav aria-label="Project">
+<a href="https://github.com/gureetk/wglink">Source</a>
+<a href="https://github.com/gureetk/wglink/releases">Releases</a>
+<a href="https://github.com/gureetk/wglink/blob/main/CHANGELOG.md">Changelog</a>
+</nav>
+</div>
+</footer>
+
+</body>
+</html>

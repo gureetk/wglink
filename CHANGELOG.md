@@ -13,6 +13,9 @@ Notable changes to wglink. The format follows
   `openssh-client` and `wireguard-tools`. CI installs them on Debian and
   Fedora before a release can ship them.
 - Release archives include the shell completions too.
+- A website, published from `site/` with GitHub Pages: a home page and a
+  quick start, in light and dark themes that follow the system unless you
+  pick one.
 
 ## [0.3.0] - 2026-11-17
 
