@@ -4,6 +4,17 @@ Notable changes to wglink. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- Full docs on the website: every part of the README on its own page, and a
+  reference of every command with the help it prints. The pages are made
+  from the README and `wglink --help` by `scripts/docgen`, and CI fails if
+  they're out of date.
+- The README covers rotating keys, removing nodes and networks, every node
+  setting, including `service`, and where wglink looks for `wglink.yaml`.
+
 ## [0.4.0] - 2026-11-17
 
 Install with apt or dnf: `.deb` and `.rpm` packages come with each release,
@@ -141,6 +152,7 @@ that tunnels pass traffic.
   - End-to-end tests run against real WireGuard in network namespaces, over
     exec, SSH and systemd.
 
+[Unreleased]: https://github.com/gureetk/wglink/compare/v0.4.0...HEAD
 [0.4.0]: https://github.com/gureetk/wglink/releases/tag/v0.4.0
 [0.3.0]: https://github.com/gureetk/wglink/releases/tag/v0.3.0
 [0.2.0]: https://github.com/gureetk/wglink/releases/tag/v0.2.0

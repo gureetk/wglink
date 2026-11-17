@@ -1,10 +1,11 @@
 <!doctype html>
+<!-- Made by scripts/docgen from README.md and wglink's help. Edit those, not this file. -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Quick start · wglink docs</title>
-<meta name="description" content="Connect three Linux machines over WireGuard with wglink in a few commands.">
+<title>Overview · wglink docs</title>
+<meta name="description" content="Connect Linux machines over WireGuard from one inventory file. Plan, apply and check tunnels over SSH and Proxmox, with no agent.">
 <meta name="color-scheme" content="light dark">
 <link rel="icon" href="../favicon.svg" type="image/svg+xml">
 <script>try{var t=localStorage.getItem("theme");if(t==="light"||t==="dark")document.documentElement.dataset.theme=t}catch(e){}</script>
@@ -20,7 +21,6 @@
 <div class="wrap">
 <a class="brand" href="../"><span class="dot" aria-hidden="true"></span>wglink <span class="sub">docs</span></a>
 <nav class="nav" aria-label="Main">
-<span class="mono" style="font-size: 13px; color: var(--muted)">v0.4.0</span>
 <a class="button" href="https://github.com/gureetk/wglink">GitHub</a>
 <button class="button theme-toggle" type="button" aria-label="Switch theme">
 <svg class="moon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
@@ -34,72 +34,94 @@
 <nav class="sidebar" aria-label="Docs">
 <div>
 <p>Getting started</p>
-<a href="../#install">Install</a>
-<a href="./" aria-current="page">Quick start</a>
-<a href="https://github.com/gureetk/wglink#the-inventory">The inventory</a>
+<a href="./" aria-current="page">Overview</a>
+<a href="install.html">Install</a>
+<a href="quick-start.html">Quick start</a>
+<a href="inventory.html">The inventory</a>
 </div>
 <div>
 <p>Guides</p>
-<a href="https://github.com/gureetk/wglink#reaching-machines">Reaching machines</a>
-<a href="https://github.com/gureetk/wglink#phones-and-other-devices">Phones and other devices</a>
-<a href="https://github.com/gureetk/wglink#hub-and-spoke">Hub and spoke</a>
-<a href="https://github.com/gureetk/wglink#routed-subnets">Routed subnets</a>
-<a href="https://github.com/gureetk/wglink#ipv6">IPv6</a>
-<a href="https://github.com/gureetk/wglink#preshared-keys">Preshared keys</a>
-<a href="https://github.com/gureetk/wglink#dashboard">Dashboard</a>
+<a href="reaching-machines.html">Reaching machines</a>
+<a href="phones.html">Phones and other devices</a>
+<a href="hub-and-spoke.html">Hub and spoke</a>
+<a href="routed-subnets.html">Routed subnets</a>
+<a href="ipv6.html">IPv6</a>
+<a href="preshared-keys.html">Preshared keys</a>
+<a href="rotating-keys.html">Rotating keys</a>
+<a href="removing.html">Removing nodes and networks</a>
+<a href="dashboard.html">Dashboard</a>
 </div>
 <div>
 <p>Reference</p>
-<a href="https://github.com/gureetk/wglink#status">Status</a>
-<a href="https://github.com/gureetk/wglink#how-it-works">How it works</a>
-<a href="https://github.com/gureetk/wglink#security">Security</a>
+<a href="commands.html">Commands</a>
+<a href="status.html">Status</a>
+<a href="how-it-works.html">How it works</a>
+<a href="security.html">Security</a>
+<a href="compared.html">Compared with other tools</a>
+</div>
+<div>
+<p>Project</p>
+<a href="development.html">Development</a>
 </div>
 </nav>
 
 <main class="article">
-<h1>Quick start</h1>
-<p class="lead">Connect three machines in a few commands. wglink runs on one machine, the controller, which can be one of the nodes too.</p>
-
-<h2>1. Describe the machines</h2>
-<p>Create <code>wglink.yaml</code>, add each machine, and put them in a network.</p>
-<div class="term"><pre>wglink init                                <span class="t-dim"># writes wglink.yaml here</span>
-wglink node add pve1 --ssh root@192.168.1.10
-wglink node add nas  --ssh admin@192.168.1.20 --sudo
-wglink node add pi   --ssh pi@192.168.1.30 --sudo
-wglink connect pve1 nas pi --name lab</pre></div>
-<p><code>node add</code> connects once to check the machine and tells you if anything is missing.</p>
-
-<h2>2. Preview the change</h2>
-<p><code>plan</code> connects to every node, works out addresses and shows what would change. Nothing is changed yet.</p>
-<div class="term"><pre><span class="t-dim">$</span> wglink plan
+<h1>Overview</h1>
+<p><strong>Connect Linux machines over WireGuard from one inventory file.</strong> List your
+machines in <code>wglink.yaml</code>, preview the change with <code>wglink plan</code>, make it
+with <code>wglink apply</code>, and check each tunnel with <code>wglink status</code>.</p>
+<p>wglink is one static binary with no agent, no coordination server and no
+account. It reaches machines the way you already do: SSH, local commands,
+<code>docker exec</code>, and Proxmox containers and VMs. What it leaves behind are
+ordinary <code>wg-quick</code> configs that keep working without it. Private keys are
+made on the machines that use them and never leave.</p>
+<pre><code class="language-sh">wglink connect pve1 nas pi --name lab
+wglink apply
+</code></pre>
+<pre><code class="language-console">$ wglink status
 network lab   wg-lab   10.99.0.0/24   udp/51820
-  <span class="t-ok">+</span> pve1  10.99.0.1       new interface, 2 peers, new key
-  <span class="t-ok">+</span> nas   10.99.0.2       new interface, 2 peers, new key
-  <span class="t-ok">+</span> pi    10.99.0.3       new interface, 2 peers, new key
+  pve1  10.99.0.1       up
+  nas   10.99.0.2       up
+  pi    10.99.0.3       up
 
-3 to create, 0 to change live, 0 to restart, 0 to remove.</pre></div>
+  pve1 &lt;-&gt; nas  ok  handshake 14s ago, ping 0.4 ms  rx 1.2 MiB  tx 880.0 KiB
+  pve1 &lt;-&gt; pi   ok  idle, ping 1.1 ms
+  nas &lt;-&gt; pi    ok  handshake 1m ago, ping 0.9 ms   rx 52.3 KiB  tx 61.0 KiB
 
-<h2>3. Apply it and check</h2>
-<p><code>apply</code> shows the same plan, asks for confirmation, then makes the change. <code>status</code> checks each tunnel.</p>
-<div class="term"><pre><span class="t-dim">$</span> wglink status
-  pve1 &lt;-&gt; nas  <span class="t-ok">ok</span>  handshake 14s ago, ping 0.4 ms
-  pve1 &lt;-&gt; pi   <span class="t-ok">ok</span>  idle, ping 1.1 ms
-  nas &lt;-&gt; pi    <span class="t-ok">ok</span>  handshake 1m ago, ping 0.9 ms
-
-All 3 links are ok.</pre></div>
-
-<div class="note">
-<strong>Every node needs</strong>
+All 3 links are ok.
+</code></pre>
+<h2 id="features">Features</h2>
 <ul>
-<li>Linux with <code>sh</code>, <code>ip</code> and <code>wireguard-tools</code>.</li>
-<li>Root, or passwordless <code>sudo</code> for the user wglink connects as.</li>
-<li>The WireGuard kernel module (Linux 5.6 and later) or <code>wireguard-go</code>.</li>
+<li><strong>Full-mesh or hub-and-spoke networks</strong> between any Linux machines: bare
+metal, VMs, containers, Raspberry Pis, Proxmox hosts and their guests, plus
+phones and other devices you set up by hand.</li>
+<li><strong>Automatic addressing that stays put.</strong> Subnets, ports and tunnel
+addresses are picked for you, kept across runs, and chosen to avoid
+addresses, routes and ports already in use on each machine. Pin any of them
+when you care: a host part (<code>.10</code>), a full address, a subnet or a port.</li>
+<li><strong>IPv6, preshared keys and key rotation.</strong> Give any network a unique local
+IPv6 subnet and every pair of peers a preshared key, and replace keys with
+one command.</li>
+<li><strong>Plan before you apply.</strong> Every change is previewed. Peer changes load
+live with <code>wg syncconf</code>; only address, port and MTU changes restart an
+interface.</li>
+<li><strong>Drift detection.</strong> Edits made by hand on a machine show up in <code>plan</code> and
+<code>status</code>, and <code>apply</code> puts the file back.</li>
+<li><strong>Health at a glance.</strong> <code>status</code> judges every link from handshakes and pings
+through the tunnel. It prints JSON for scripts, gives exit codes for
+monitoring, and has <code>--local</code> mode for checking one machine by itself.
+<code>wglink ui</code> keeps it all on screen, with plan and apply a key away.</li>
+<li><strong>Agentless.</strong> wglink sends small POSIX <code>sh</code> scripts over stdin to the
+machines it manages. They need only <code>wireguard-tools</code>, and nothing of
+wglink's stays running on them.</li>
+<li><strong>Careful by default.</strong> wglink won't overwrite configs it didn't write,
+keeps a backup of every config it replaces, and lets only one <code>apply</code> run
+at a time per inventory. A change that cuts wglink off from an SSH node is
+undone by the node itself a minute later.</li>
 </ul>
-</div>
 
-<nav class="pager" aria-label="Next and previous">
-<a href="../#install"><span>Previous</span>Install</a>
-<a href="https://github.com/gureetk/wglink#the-inventory"><span>Next</span>The inventory</a>
+<nav class="pager" aria-label="Previous and next pages">
+<a class="next" href="install.html"><span>Next</span>Install</a>
 </nav>
 </main>
 </div>

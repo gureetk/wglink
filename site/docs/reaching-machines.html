@@ -1,0 +1,146 @@
+<!doctype html>
+<!-- Made by scripts/docgen from README.md and wglink's help. Edit those, not this file. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Reaching machines · wglink docs</title>
+<meta name="description" content="How wglink reaches nodes: SSH, the local machine, any exec command, and Proxmox containers and VMs.">
+<meta name="color-scheme" content="light dark">
+<link rel="icon" href="../favicon.svg" type="image/svg+xml">
+<script>try{var t=localStorage.getItem("theme");if(t==="light"||t==="dark")document.documentElement.dataset.theme=t}catch(e){}</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=JetBrains+Mono:wght@400;600&amp;family=Space+Grotesk:wght@500;600;700&amp;display=swap">
+<link rel="stylesheet" href="../style.css">
+<script src="../site.js" defer></script>
+</head>
+<body>
+
+<header class="top docs-top">
+<div class="wrap">
+<a class="brand" href="../"><span class="dot" aria-hidden="true"></span>wglink <span class="sub">docs</span></a>
+<nav class="nav" aria-label="Main">
+<a class="button" href="https://github.com/gureetk/wglink">GitHub</a>
+<button class="button theme-toggle" type="button" aria-label="Switch theme">
+<svg class="moon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+<svg class="sun" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
+</button>
+</nav>
+</div>
+</header>
+
+<div class="wrap docs">
+<nav class="sidebar" aria-label="Docs">
+<div>
+<p>Getting started</p>
+<a href="./">Overview</a>
+<a href="install.html">Install</a>
+<a href="quick-start.html">Quick start</a>
+<a href="inventory.html">The inventory</a>
+</div>
+<div>
+<p>Guides</p>
+<a href="reaching-machines.html" aria-current="page">Reaching machines</a>
+<a href="phones.html">Phones and other devices</a>
+<a href="hub-and-spoke.html">Hub and spoke</a>
+<a href="routed-subnets.html">Routed subnets</a>
+<a href="ipv6.html">IPv6</a>
+<a href="preshared-keys.html">Preshared keys</a>
+<a href="rotating-keys.html">Rotating keys</a>
+<a href="removing.html">Removing nodes and networks</a>
+<a href="dashboard.html">Dashboard</a>
+</div>
+<div>
+<p>Reference</p>
+<a href="commands.html">Commands</a>
+<a href="status.html">Status</a>
+<a href="how-it-works.html">How it works</a>
+<a href="security.html">Security</a>
+<a href="compared.html">Compared with other tools</a>
+</div>
+<div>
+<p>Project</p>
+<a href="development.html">Development</a>
+</div>
+</nav>
+
+<main class="article">
+<h1>Reaching machines</h1>
+<table>
+<thead>
+<tr>
+<th>How</th>
+<th>Example</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>SSH</td>
+<td><code>--ssh root@192.168.1.10</code>, <code>--ssh pi-garage</code></td>
+<td>Uses your OpenSSH client, keys and <code>~/.ssh/config</code>. Runs in batch mode, so it needs key-based login. Opens one connection per node and reuses it.</td>
+</tr>
+<tr>
+<td>Local</td>
+<td><code>--local</code></td>
+<td>The machine wglink runs on.</td>
+</tr>
+<tr>
+<td>Exec</td>
+<td><code>--exec &quot;docker exec -i web&quot;</code></td>
+<td>Any command that runs <code>sh -s</code> with stdin attached.</td>
+</tr>
+<tr>
+<td>Proxmox container</td>
+<td><code>--pct 101 --via pve1</code></td>
+<td>Runs <code>pct exec</code> on the Proxmox host node <code>pve1</code>.</td>
+</tr>
+<tr>
+<td>Proxmox VM</td>
+<td><code>--qm 200 --via pve1</code></td>
+<td>Runs commands through the QEMU guest agent (<code>qm guest exec</code>), so the VM needs <code>qemu-guest-agent</code> and no SSH.</td>
+</tr>
+</tbody>
+</table>
+<p>Add <code>--sudo</code> to SSH and local nodes to use <code>sudo -n</code> when the login isn't
+root. wglink never asks for or stores a password.</p>
+<p>On a Proxmox host that is already a node, <code>wglink discover</code> lists its
+containers and VMs with their addresses. With <code>--add</code>, it adds the running
+ones as nodes, reached through the host:</p>
+<pre><code class="language-console">$ wglink discover pve1 --add
+VMID   TYPE   NAME             STATUS    ADDRESS         NODE
+101    lxc    media            running   192.168.1.101   media (added)
+102    lxc    test             stopped   -               -
+200    qemu   home-assistant   running   192.168.1.200   home-assistant (added)
+201    qemu   win11            running   -               QEMU guest agent is not running
+
+Added media, home-assistant. Next, put them in a network: wglink net join NETWORK media home-assistant
+Left out win11 201 (QEMU guest agent is not running); add it by hand, for example with --ssh.
+</code></pre>
+<p>Peers dial each node at its <strong>endpoint</strong>. For SSH nodes the endpoint is the
+host that SSH connects to (as <code>ssh -G</code> resolves it), so most nodes need
+nothing more. Other nodes need <code>--endpoint ADDRESS</code>. A machine behind NAT that
+nobody can dial gets <code>--endpoint none --keepalive 25</code>: it dials out to the
+others and keeps the path open.</p>
+
+<nav class="pager" aria-label="Previous and next pages">
+<a href="inventory.html"><span>Previous</span>The inventory</a>
+<a class="next" href="phones.html"><span>Next</span>Phones and other devices</a>
+</nav>
+</main>
+</div>
+
+<footer class="foot">
+<div class="wrap">
+<span>wglink is MIT licensed. Built by <a href="https://github.com/gureetk">gureet</a>.</span>
+<nav aria-label="Project">
+<a href="https://github.com/gureetk/wglink">Source</a>
+<a href="https://github.com/gureetk/wglink/releases">Releases</a>
+<a href="https://github.com/gureetk/wglink/blob/main/CHANGELOG.md">Changelog</a>
+</nav>
+</div>
+</footer>
+
+</body>
+</html>

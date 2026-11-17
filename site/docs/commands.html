@@ -1,0 +1,668 @@
+<!doctype html>
+<!-- Made by scripts/docgen from README.md and wglink's help. Edit those, not this file. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Commands · wglink docs</title>
+<meta name="description" content="Every wglink command, with the help it prints.">
+<meta name="color-scheme" content="light dark">
+<link rel="icon" href="../favicon.svg" type="image/svg+xml">
+<script>try{var t=localStorage.getItem("theme");if(t==="light"||t==="dark")document.documentElement.dataset.theme=t}catch(e){}</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=JetBrains+Mono:wght@400;600&amp;family=Space+Grotesk:wght@500;600;700&amp;display=swap">
+<link rel="stylesheet" href="../style.css">
+<script src="../site.js" defer></script>
+</head>
+<body>
+
+<header class="top docs-top">
+<div class="wrap">
+<a class="brand" href="../"><span class="dot" aria-hidden="true"></span>wglink <span class="sub">docs</span></a>
+<nav class="nav" aria-label="Main">
+<a class="button" href="https://github.com/gureetk/wglink">GitHub</a>
+<button class="button theme-toggle" type="button" aria-label="Switch theme">
+<svg class="moon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+<svg class="sun" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
+</button>
+</nav>
+</div>
+</header>
+
+<div class="wrap docs">
+<nav class="sidebar" aria-label="Docs">
+<div>
+<p>Getting started</p>
+<a href="./">Overview</a>
+<a href="install.html">Install</a>
+<a href="quick-start.html">Quick start</a>
+<a href="inventory.html">The inventory</a>
+</div>
+<div>
+<p>Guides</p>
+<a href="reaching-machines.html">Reaching machines</a>
+<a href="phones.html">Phones and other devices</a>
+<a href="hub-and-spoke.html">Hub and spoke</a>
+<a href="routed-subnets.html">Routed subnets</a>
+<a href="ipv6.html">IPv6</a>
+<a href="preshared-keys.html">Preshared keys</a>
+<a href="rotating-keys.html">Rotating keys</a>
+<a href="removing.html">Removing nodes and networks</a>
+<a href="dashboard.html">Dashboard</a>
+</div>
+<div>
+<p>Reference</p>
+<a href="commands.html" aria-current="page">Commands</a>
+<a href="status.html">Status</a>
+<a href="how-it-works.html">How it works</a>
+<a href="security.html">Security</a>
+<a href="compared.html">Compared with other tools</a>
+</div>
+<div>
+<p>Project</p>
+<a href="development.html">Development</a>
+</div>
+</nav>
+
+<main class="article">
+<h1>Commands</h1>
+<p>Every command, with the help it prints. Run <code>wglink COMMAND --help</code> for the same.</p>
+<p class="toc-title">Describe nodes and networks</p>
+<ul class="toc">
+<li><a href="#wglink-connect"><code>wglink connect</code></a><span>Join nodes in a network, creating it if needed</span></li>
+<li><a href="#wglink-discover"><code>wglink discover</code></a><span>List a Proxmox host&#39;s containers and VMs, and add them as nodes</span></li>
+<li><a href="#wglink-init"><code>wglink init</code></a><span>Create wglink.yaml in the current directory or --dir</span></li>
+<li><a href="#wglink-ip"><code>wglink ip</code></a><span>Pin a member&#39;s address, or set it back to auto</span></li>
+<li><a href="#wglink-net"><code>wglink net</code></a><span>Create, change and remove networks</span></li>
+<li><a href="#wglink-net-create"><code>wglink net create</code></a><span>Create an empty network</span></li>
+<li><a href="#wglink-net-join"><code>wglink net join</code></a><span>Add nodes to a network</span></li>
+<li><a href="#wglink-net-leave"><code>wglink net leave</code></a><span>Take nodes out of a network</span></li>
+<li><a href="#wglink-net-list"><code>wglink net list</code></a><span>List networks</span></li>
+<li><a href="#wglink-net-rm"><code>wglink net rm</code></a><span>Remove a network; the next apply deletes its tunnels</span></li>
+<li><a href="#wglink-net-set"><code>wglink net set</code></a><span>Change a network&#39;s settings</span></li>
+<li><a href="#wglink-net-show"><code>wglink net show</code></a><span>Show a network&#39;s settings and member addresses</span></li>
+<li><a href="#wglink-node"><code>wglink node</code></a><span>Add, list and remove machines</span></li>
+<li><a href="#wglink-node-add"><code>wglink node add</code></a><span>Add a machine, or a device such as a phone</span></li>
+<li><a href="#wglink-node-list"><code>wglink node list</code></a><span>List machines</span></li>
+<li><a href="#wglink-node-rm"><code>wglink node rm</code></a><span>Remove a machine from wglink.yaml</span></li>
+<li><a href="#wglink-routes"><code>wglink routes</code></a><span>Set the subnets a member routes for the others</span></li>
+</ul>
+<p class="toc-title">Change and inspect nodes</p>
+<ul class="toc">
+<li><a href="#wglink-apply"><code>wglink apply</code></a><span>Make the nodes match wglink.yaml</span></li>
+<li><a href="#wglink-export"><code>wglink export</code></a><span>Print the config for a manual node, such as a phone</span></li>
+<li><a href="#wglink-plan"><code>wglink plan</code></a><span>Show what apply would change</span></li>
+<li><a href="#wglink-rotate"><code>wglink rotate</code></a><span>Replace members&#39; keys</span></li>
+<li><a href="#wglink-state"><code>wglink state</code></a><span>Look after wglink.state.json</span></li>
+<li><a href="#wglink-state-rebuild"><code>wglink state rebuild</code></a><span>Recover wglink.state.json from the configs on the nodes</span></li>
+<li><a href="#wglink-status"><code>wglink status</code></a><span>Show whether each tunnel is up and passing traffic</span></li>
+<li><a href="#wglink-ui"><code>wglink ui</code></a><span>Watch your networks live, and plan and apply from a dashboard</span></li>
+</ul>
+<p class="toc-title">Other commands</p>
+<ul class="toc">
+<li><a href="#wglink-completion"><code>wglink completion</code></a><span>Generate the autocompletion script for the specified shell</span></li>
+<li><a href="#wglink-version"><code>wglink version</code></a><span>Print the wglink version</span></li>
+</ul>
+<h2 id="describe-nodes-and-networks">Describe nodes and networks</h2>
+<h3 id="wglink-connect"><code>wglink connect</code></h3>
+<pre>Join nodes in a full mesh, or with --hub, all through one of them. Without
+--name, two nodes get a network named after them and more get net1, net2, and
+so on. Addresses are automatic unless pinned with --ip, as a host part
+(nas=.10) or a full address (nas=10.99.0.10).
+
+Usage:
+  wglink connect NODE NODE [NODE...] [flags]
+
+Examples:
+  wglink connect pve1 pve2
+  wglink connect pve1 nas ct101 --name lab
+  wglink connect vps laptop phone --name road --hub vps
+  wglink connect nas pve1 --name backup --subnet 172.30.5.0/24 --ip nas=.10
+
+Flags:
+  -h, --help                   help for connect
+      --hub string             member the others connect through, instead of all to all
+      --ip stringArray         pin an address: NODE=.N, NODE=.N.N or NODE=ADDRESS (repeatable)
+      --ipv6 string[=&#34;auto&#34;]   add IPv6: alone for a random unique local /64, =PREFIX for a fixed one, or =off
+      --keepalive string       keepalive interval in seconds for every member (0 is off)
+      --mtu string             interface MTU (default: wg-quick decides)
+      --name string            network name, at most 12 characters
+      --port string            UDP listen port on every member (default: first free from 51820)
+      --psk                    give each pair of peers a preshared key as well
+      --subnet string          IPv4 subnet, e.g. 10.99.0.0/24 (default: picked from the pool)
+
+Global Flags:
+      --dir string   directory holding wglink.yaml (default: $WGLINK_DIR, then ., then ~/.config/wglink)
+</pre>
+<h3 id="wglink-discover"><code>wglink discover</code></h3>
+<pre>Ask a Proxmox VE host, already a node, for its containers and VMs, with the
+addresses of the running ones. Containers are reached with pct and VMs with
+the QEMU guest agent, both through the host, so guests need no SSH.
+
+With --add, every running guest that isn&#39;t a node yet becomes one, named after
+the guest and dialed at its address. Then add them to a network.
+
+Usage:
+  wglink discover HOST [flags]
+
+Examples:
+  wglink discover pve1
+  wglink discover pve1 --add
+  wglink net join lab nas web
+
+Flags:
+      --add    add every running guest that isn&#39;t a node yet
+  -h, --help   help for discover
+
+Global Flags:
+      --dir string   directory holding wglink.yaml (default: $WGLINK_DIR, then ., then ~/.config/wglink)
+</pre>
+<h3 id="wglink-init"><code>wglink init</code></h3>
+<pre>Create wglink.yaml in the current directory or --dir
+
+Usage:
+  wglink init [flags]
+
+Flags:
+  -h, --help          help for init
+      --pool string   range automatic subnets come from (default &#34;10.99.0.0/16&#34;)
+      --port int      first UDP port tried (default 51820)
+      --prefix int    size of each automatic subnet (default 24)
+
+Global Flags:
+      --dir string   directory holding wglink.yaml (default: $WGLINK_DIR, then ., then ~/.config/wglink)
+</pre>
+<h3 id="wglink-ip"><code>wglink ip</code></h3>
+<pre>Pin a member&#39;s address, or set it back to auto
+
+Usage:
+  wglink ip NETWORK NODE ADDRESS [flags]
+
+Examples:
+  wglink ip lab nas .10            # host part in the network&#39;s subnet
+  wglink ip lab nas 10.99.0.10     # full address
+  wglink ip lab nas auto           # let wglink pick again
+
+Flags:
+  -h, --help   help for ip
+
+Global Flags:
+      --dir string   directory holding wglink.yaml (default: $WGLINK_DIR, then ., then ~/.config/wglink)
+</pre>
+<h3 id="wglink-net"><code>wglink net</code></h3>
+<pre>Create, change and remove networks
+
+Usage:
+  wglink net [command]
+
+Aliases:
+  net, network
+
+Available Commands:
+  create      Create an empty network
+  join        Add nodes to a network
+  leave       Take nodes out of a network
+  list        List networks
+  rm          Remove a network; the next apply deletes its tunnels
+  set         Change a network&#39;s settings
+  show        Show a network&#39;s settings and member addresses
+
+Flags:
+  -h, --help   help for net
+
+Global Flags:
+      --dir string   directory holding wglink.yaml (default: $WGLINK_DIR, then ., then ~/.config/wglink)
+
+Use &#34;wglink net [command] --help&#34; for more information about a command.
+</pre>
+<h3 id="wglink-net-create"><code>wglink net create</code></h3>
+<pre>Create an empty network
+
+Usage:
+  wglink net create NAME [flags]
+
+Flags:
+  -h, --help                   help for create
+      --hub string             member the others connect through, instead of all to all
+      --ipv6 string[=&#34;auto&#34;]   add IPv6: alone for a random unique local /64, =PREFIX for a fixed one, or =off
+      --keepalive string       keepalive interval in seconds for every member (0 is off)
+      --mtu string             interface MTU (default: wg-quick decides)
+      --port string            UDP listen port on every member (default: first free from 51820)
+      --psk                    give each pair of peers a preshared key as well
+      --subnet string          IPv4 subnet, e.g. 10.99.0.0/24 (default: picked from the pool)
+
+Global Flags:
+      --dir string   directory holding wglink.yaml (default: $WGLINK_DIR, then ., then ~/.config/wglink)
+</pre>
+<h3 id="wglink-net-join"><code>wglink net join</code></h3>
+<pre>Add nodes to a network
+
+Usage:
+  wglink net join NETWORK NODE [NODE...] [flags]
+
+Flags:
+  -h, --help        help for join
+      --ip string   pin the address: .N, .N.N or a full address
+
+Global Flags:
+      --dir string   directory holding wglink.yaml (default: $WGLINK_DIR, then ., then ~/.config/wglink)
+</pre>
+<h3 id="wglink-net-leave"><code>wglink net leave</code></h3>
+<pre>Take nodes out of a network
+
+Usage:
+  wglink net leave NETWORK NODE [NODE...] [flags]
+
+Flags:
+  -h, --help   help for leave
+
+Global Flags:
+      --dir string   directory holding wglink.yaml (default: $WGLINK_DIR, then ., then ~/.config/wglink)
+</pre>
+<h3 id="wglink-net-list"><code>wglink net list</code></h3>
+<pre>List networks
+
+Usage:
+  wglink net list [flags]
+
+Aliases:
+  list, ls
+
+Flags:
+  -h, --help   help for list
+
+Global Flags:
+      --dir string   directory holding wglink.yaml (default: $WGLINK_DIR, then ., then ~/.config/wglink)
+</pre>
+<h3 id="wglink-net-rm"><code>wglink net rm</code></h3>
+<pre>Remove a network; the next apply deletes its tunnels
+
+Usage:
+  wglink net rm NETWORK [flags]
+
+Aliases:
+  rm, remove
+
+Flags:
+  -h, --help   help for rm
+
+Global Flags:
+      --dir string   directory holding wglink.yaml (default: $WGLINK_DIR, then ., then ~/.config/wglink)
+</pre>
+<h3 id="wglink-net-set"><code>wglink net set</code></h3>
+<pre>Change a network&#39;s settings
+
+Usage:
+  wglink net set NETWORK [flags]
+
+Examples:
+  wglink net set lab --subnet 10.50.0.0/24
+  wglink net set lab --port auto --mtu 1380
+
+Flags:
+  -h, --help                   help for set
+      --hub string             member the others connect through, instead of all to all, or &#34;none&#34;
+      --iface string           interface name, or &#34;auto&#34; for wg-&lt;network&gt;
+      --ipv6 string[=&#34;auto&#34;]   add IPv6: alone for a random unique local /64, =PREFIX for a fixed one, or =off
+      --keepalive string       keepalive interval in seconds for every member (0 is off)
+      --mtu string             interface MTU (default: wg-quick decides, or &#34;auto&#34;)
+      --port string            UDP listen port on every member (default: first free from 51820, or &#34;auto&#34;)
+      --psk                    give each pair of peers a preshared key as well (--psk=false to stop)
+      --subnet string          IPv4 subnet, e.g. 10.99.0.0/24 (default: picked from the pool, or &#34;auto&#34;)
+
+Global Flags:
+      --dir string   directory holding wglink.yaml (default: $WGLINK_DIR, then ., then ~/.config/wglink)
+</pre>
+<h3 id="wglink-net-show"><code>wglink net show</code></h3>
+<pre>Show a network&#39;s settings and member addresses
+
+Usage:
+  wglink net show NETWORK [flags]
+
+Flags:
+  -h, --help   help for show
+
+Global Flags:
+      --dir string   directory holding wglink.yaml (default: $WGLINK_DIR, then ., then ~/.config/wglink)
+</pre>
+<h3 id="wglink-node"><code>wglink node</code></h3>
+<pre>Add, list and remove machines
+
+Usage:
+  wglink node [command]
+
+Available Commands:
+  add         Add a machine, or a device such as a phone
+  list        List machines
+  rm          Remove a machine from wglink.yaml
+
+Flags:
+  -h, --help   help for node
+
+Global Flags:
+      --dir string   directory holding wglink.yaml (default: $WGLINK_DIR, then ., then ~/.config/wglink)
+
+Use &#34;wglink node [command] --help&#34; for more information about a command.
+</pre>
+<h3 id="wglink-node-add"><code>wglink node add</code></h3>
+<pre>Add a machine, or a device such as a phone
+
+Usage:
+  wglink node add NAME (--ssh DEST | --local | --exec CMD | --pct VMID --via HOST | --qm VMID --via HOST | --manual) [flags]
+
+Examples:
+  wglink node add pve1 --ssh root@192.168.1.10
+  wglink node add nas --ssh admin@nas.lan --sudo
+  wglink node add pi --ssh pi-garage                 # a Host in ~/.ssh/config
+  wglink node add ct101 --pct 101 --via pve1 --endpoint 192.168.1.101
+  wglink node add vm200 --qm 200 --via pve1 --endpoint 192.168.1.200
+  wglink node add web --exec &#34;docker exec -i web&#34; --endpoint 172.17.0.2
+  wglink node add laptop --local --endpoint 192.168.1.50
+  wglink node add phone --manual --keepalive 25     # set up with wglink export
+
+Flags:
+      --endpoint string   address peers dial: host, host:port or &#34;none&#34; (default for ssh: the ssh host)
+      --exec string       reach it through a local command, e.g. &#34;docker exec -i web&#34;
+  -h, --help              help for add
+      --keepalive int     send keepalives every N seconds (for nodes behind NAT)
+      --local             it is the machine wglink runs on
+      --manual            a device wglink can&#39;t reach, such as a phone; its config comes from wglink export
+      --no-check          don&#39;t connect to check the node
+      --pct int           a Proxmox container ID, reached with pct exec through --via
+      --pubkey string     the public key a --manual device already has (default: made by wglink export)
+      --qm int            a Proxmox VM ID, reached with its QEMU guest agent through --via
+      --service string    how tunnels start at boot: auto, systemd or none
+      --ssh string        reach it over SSH: user@host, ssh://user@host:port or a ~/.ssh/config alias
+      --sudo              become root with sudo -n (ssh and local)
+      --via string        the Proxmox host node for --pct or --qm
+
+Global Flags:
+      --dir string   directory holding wglink.yaml (default: $WGLINK_DIR, then ., then ~/.config/wglink)
+</pre>
+<h3 id="wglink-node-list"><code>wglink node list</code></h3>
+<pre>List machines
+
+Usage:
+  wglink node list [flags]
+
+Aliases:
+  list, ls
+
+Flags:
+  -h, --help   help for list
+
+Global Flags:
+      --dir string   directory holding wglink.yaml (default: $WGLINK_DIR, then ., then ~/.config/wglink)
+</pre>
+<h3 id="wglink-node-rm"><code>wglink node rm</code></h3>
+<pre>Remove a machine from wglink.yaml. To also delete its tunnels, take it out of
+its networks and run &#34;wglink apply&#34; first; once it&#39;s removed, wglink can&#39;t
+reach it to clean up.
+
+Usage:
+  wglink node rm NAME [flags]
+
+Aliases:
+  rm, remove
+
+Flags:
+      --force   also take the node out of its networks
+  -h, --help    help for rm
+
+Global Flags:
+      --dir string   directory holding wglink.yaml (default: $WGLINK_DIR, then ., then ~/.config/wglink)
+</pre>
+<h3 id="wglink-routes"><code>wglink routes</code></h3>
+<pre>Set the subnets behind a member, such as its LAN, that the network&#39;s other
+members reach through it. With no subnets, the member routes nothing.
+
+The member needs IP forwarding on, and hosts on those subnets need a route
+back to the network through it.
+
+Usage:
+  wglink routes NETWORK NODE [SUBNET...] [flags]
+
+Examples:
+  wglink routes lab nas 192.168.50.0/24
+  wglink routes lab nas              # route nothing
+
+Flags:
+  -h, --help   help for routes
+
+Global Flags:
+      --dir string   directory holding wglink.yaml (default: $WGLINK_DIR, then ., then ~/.config/wglink)
+</pre>
+<h2 id="change-and-inspect-nodes">Change and inspect nodes</h2>
+<h3 id="wglink-apply"><code>wglink apply</code></h3>
+<pre>Show the plan, ask for confirmation, then change the nodes: remove interfaces
+that are no longer wanted, create missing keys on their own nodes, and write
+configs one node at a time. It stops at the first failure; running it again
+picks up where it stopped.
+
+Each change to an SSH node is confirmed over a new SSH connection. If that
+fails, for example because the change cut off the route wglink uses, the
+node puts its previous config back after a minute. This needs systemd on the
+node; --no-revert turns it off.
+
+Usage:
+  wglink apply [flags]
+
+Flags:
+      --adopt          replace configs wglink didn&#39;t write
+  -h, --help           help for apply
+      --net strings    only these networks (repeatable)
+      --no-revert      don&#39;t have SSH nodes undo a change that wglink can&#39;t confirm
+      --node strings   only change these nodes (repeatable)
+  -y, --yes            don&#39;t ask for confirmation
+
+Global Flags:
+      --dir string   directory holding wglink.yaml (default: $WGLINK_DIR, then ., then ~/.config/wglink)
+</pre>
+<h3 id="wglink-export"><code>wglink export</code></h3>
+<pre>Print the wg-quick config for a manual node: a device wglink can&#39;t reach,
+such as a phone. The first export makes the device&#39;s key pair. The private
+key goes into the printed config and is kept nowhere else; the public key is
+saved in wglink.yaml. Later exports leave a placeholder for the private key,
+unless --new-key replaces the pair.
+
+In a network with preshared keys, every export makes new ones: the peers
+wglink can reach store theirs, and the config carries the device&#39;s.
+
+Then run &#34;wglink apply&#34; so the other members add the device as a peer.
+&#34;wglink plan&#34; says when a device&#39;s config has changed and needs exporting
+again.
+
+Usage:
+  wglink export NETWORK NODE [flags]
+
+Examples:
+  wglink node add phone --manual --keepalive 25
+  wglink net join lab phone
+  wglink export lab phone -o phone.conf
+  qrencode -t ansiutf8 &lt; phone.conf    # scan with the WireGuard app
+  wglink apply
+
+Flags:
+  -h, --help            help for export
+      --new-key         make a new key pair; the device needs the new config
+  -o, --output string   write the config to this file (mode 0600) instead of stdout
+
+Global Flags:
+      --dir string   directory holding wglink.yaml (default: $WGLINK_DIR, then ., then ~/.config/wglink)
+</pre>
+<h3 id="wglink-plan"><code>wglink plan</code></h3>
+<pre>Connect to every node involved and show what &#34;wglink apply&#34; would change.
+Nothing is changed. Problems listed under &#34;problems&#34; stop apply until fixed.
+
+Usage:
+  wglink plan [flags]
+
+Flags:
+      --adopt          replace configs wglink didn&#39;t write
+      --exit-code      exit with status 2 when there are changes
+  -h, --help           help for plan
+      --net strings    only these networks (repeatable)
+      --node strings   only change these nodes (repeatable)
+
+Global Flags:
+      --dir string   directory holding wglink.yaml (default: $WGLINK_DIR, then ., then ~/.config/wglink)
+</pre>
+<h3 id="wglink-rotate"><code>wglink rotate</code></h3>
+<pre>Make new keys for some or all of a network&#39;s members, on the members
+themselves, and give the new public keys to their peers. Each member loads its
+new key live. Manual nodes get new keys with &#34;wglink export --new-key&#34;.
+
+Usage:
+  wglink rotate NETWORK [NODE...] [flags]
+
+Examples:
+  wglink rotate lab            # every member that wglink reaches
+  wglink rotate lab nas
+
+Flags:
+  -h, --help        help for rotate
+      --no-revert   don&#39;t have SSH nodes undo a change that wglink can&#39;t confirm
+  -y, --yes         don&#39;t ask for confirmation
+
+Global Flags:
+      --dir string   directory holding wglink.yaml (default: $WGLINK_DIR, then ., then ~/.config/wglink)
+</pre>
+<h3 id="wglink-state"><code>wglink state</code></h3>
+<pre>Look after wglink.state.json
+
+Usage:
+  wglink state [command]
+
+Available Commands:
+  rebuild     Recover wglink.state.json from the configs on the nodes
+
+Flags:
+  -h, --help   help for state
+
+Global Flags:
+      --dir string   directory holding wglink.yaml (default: $WGLINK_DIR, then ., then ~/.config/wglink)
+
+Use &#34;wglink state [command] --help&#34; for more information about a command.
+</pre>
+<h3 id="wglink-state-rebuild"><code>wglink state rebuild</code></h3>
+<pre>Read each member&#39;s config and put wglink.state.json back together: every
+network&#39;s subnet and port, and every member&#39;s address, public key and config
+hash. Use it when the state file is lost or out of date. The old file is kept
+as wglink.state.json.bak.
+
+Members wglink can&#39;t read, such as manual or unreachable ones, are taken from
+their peers&#39; configs, and manual nodes are assumed to have their current
+config.
+
+Usage:
+  wglink state rebuild [flags]
+
+Flags:
+  -h, --help          help for rebuild
+      --net strings   only these networks (repeatable)
+
+Global Flags:
+      --dir string   directory holding wglink.yaml (default: $WGLINK_DIR, then ., then ~/.config/wglink)
+</pre>
+<h3 id="wglink-status"><code>wglink status</code></h3>
+<pre>Ask every member for its live WireGuard state and show each pair&#39;s link.
+A link is ok after a handshake in the last 3 minutes or a ping reply through
+the tunnel. wglink pings each peer&#39;s tunnel address unless --no-ping is set.
+
+With --local, or when no wglink.yaml is found, status shows this machine&#39;s
+WireGuard interfaces instead, naming peers from the configs wglink wrote.
+
+Usage:
+  wglink status [flags]
+
+Examples:
+  wglink status
+  wglink status --net lab --json
+  wglink status --exit-code     # for scripts: 2 unless every link is ok
+  sudo wglink status --local    # on a node, without wglink.yaml
+
+Flags:
+      --exit-code     exit with status 2 unless every link is ok
+  -h, --help          help for status
+      --json          print JSON
+      --local         show this machine&#39;s interfaces instead of wglink.yaml&#39;s networks
+      --net strings   only these networks (repeatable)
+      --no-ping       judge links by handshakes alone
+
+Global Flags:
+      --dir string   directory holding wglink.yaml (default: $WGLINK_DIR, then ., then ~/.config/wglink)
+</pre>
+<h3 id="wglink-ui"><code>wglink ui</code></h3>
+<pre>Open a dashboard in the terminal with every network and the health of each
+link, checked again every few seconds. Pick a network to see its plan, and
+apply it after a confirmation, the same as &#34;wglink apply&#34;.
+
+Usage:
+  wglink ui [flags]
+
+Aliases:
+  ui, tui
+
+Flags:
+      --every duration   how often to check the networks (default 10s)
+  -h, --help             help for ui
+
+Global Flags:
+      --dir string   directory holding wglink.yaml (default: $WGLINK_DIR, then ., then ~/.config/wglink)
+</pre>
+<h2 id="other-commands">Other commands</h2>
+<h3 id="wglink-completion"><code>wglink completion</code></h3>
+<pre>Generate the autocompletion script for wglink for the specified shell.
+See each sub-command&#39;s help for details on how to use the generated script.
+
+Usage:
+  wglink completion [command]
+
+Available Commands:
+  bash        Generate the autocompletion script for bash
+  fish        Generate the autocompletion script for fish
+  powershell  Generate the autocompletion script for powershell
+  zsh         Generate the autocompletion script for zsh
+
+Flags:
+  -h, --help   help for completion
+
+Global Flags:
+      --dir string   directory holding wglink.yaml (default: $WGLINK_DIR, then ., then ~/.config/wglink)
+
+Use &#34;wglink completion [command] --help&#34; for more information about a command.
+</pre>
+<h3 id="wglink-version"><code>wglink version</code></h3>
+<pre>Print the wglink version
+
+Usage:
+  wglink version [flags]
+
+Flags:
+  -h, --help   help for version
+
+Global Flags:
+      --dir string   directory holding wglink.yaml (default: $WGLINK_DIR, then ., then ~/.config/wglink)
+</pre>
+
+<nav class="pager" aria-label="Previous and next pages">
+<a href="dashboard.html"><span>Previous</span>Dashboard</a>
+<a class="next" href="status.html"><span>Next</span>Status</a>
+</nav>
+</main>
+</div>
+
+<footer class="foot">
+<div class="wrap">
+<span>wglink is MIT licensed. Built by <a href="https://github.com/gureetk">gureet</a>.</span>
+<nav aria-label="Project">
+<a href="https://github.com/gureetk/wglink">Source</a>
+<a href="https://github.com/gureetk/wglink/releases">Releases</a>
+<a href="https://github.com/gureetk/wglink/blob/main/CHANGELOG.md">Changelog</a>
+</nav>
+</div>
+</footer>
+
+</body>
+</html>

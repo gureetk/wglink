@@ -38,6 +38,17 @@ jobs:
         run: git ls-files -z '*.sh' | xargs -0 -r shellcheck
       - name: actionlint
         run: go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12
+      - name: docs pages match the README
+        run: |
+          go -C scripts/docgen mod tidy -diff
+          go -C scripts/docgen vet ./...
+          go -C scripts/docgen run .
+          if [ -n "$(git status --porcelain -- site/docs)" ]; then
+            git status --short -- site/docs
+            git diff -- site/docs
+            echo "::error title=docs out of date::Run \"go -C scripts/docgen run .\" and commit site/docs."
+            exit 1
+          fi
 
   test:
     strategy:

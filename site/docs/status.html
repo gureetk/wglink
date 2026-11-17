@@ -1,0 +1,133 @@
+<!doctype html>
+<!-- Made by scripts/docgen from README.md and wglink's help. Edit those, not this file. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Status · wglink docs</title>
+<meta name="description" content="wglink status asks every member for its live WireGuard state and pings each peer through the tunnel. Each pair gets one of these states.">
+<meta name="color-scheme" content="light dark">
+<link rel="icon" href="../favicon.svg" type="image/svg+xml">
+<script>try{var t=localStorage.getItem("theme");if(t==="light"||t==="dark")document.documentElement.dataset.theme=t}catch(e){}</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=JetBrains+Mono:wght@400;600&amp;family=Space+Grotesk:wght@500;600;700&amp;display=swap">
+<link rel="stylesheet" href="../style.css">
+<script src="../site.js" defer></script>
+</head>
+<body>
+
+<header class="top docs-top">
+<div class="wrap">
+<a class="brand" href="../"><span class="dot" aria-hidden="true"></span>wglink <span class="sub">docs</span></a>
+<nav class="nav" aria-label="Main">
+<a class="button" href="https://github.com/gureetk/wglink">GitHub</a>
+<button class="button theme-toggle" type="button" aria-label="Switch theme">
+<svg class="moon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+<svg class="sun" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
+</button>
+</nav>
+</div>
+</header>
+
+<div class="wrap docs">
+<nav class="sidebar" aria-label="Docs">
+<div>
+<p>Getting started</p>
+<a href="./">Overview</a>
+<a href="install.html">Install</a>
+<a href="quick-start.html">Quick start</a>
+<a href="inventory.html">The inventory</a>
+</div>
+<div>
+<p>Guides</p>
+<a href="reaching-machines.html">Reaching machines</a>
+<a href="phones.html">Phones and other devices</a>
+<a href="hub-and-spoke.html">Hub and spoke</a>
+<a href="routed-subnets.html">Routed subnets</a>
+<a href="ipv6.html">IPv6</a>
+<a href="preshared-keys.html">Preshared keys</a>
+<a href="rotating-keys.html">Rotating keys</a>
+<a href="removing.html">Removing nodes and networks</a>
+<a href="dashboard.html">Dashboard</a>
+</div>
+<div>
+<p>Reference</p>
+<a href="commands.html">Commands</a>
+<a href="status.html" aria-current="page">Status</a>
+<a href="how-it-works.html">How it works</a>
+<a href="security.html">Security</a>
+<a href="compared.html">Compared with other tools</a>
+</div>
+<div>
+<p>Project</p>
+<a href="development.html">Development</a>
+</div>
+</nav>
+
+<main class="article">
+<h1>Status</h1>
+<p><code>wglink status</code> asks every member for its live WireGuard state and pings each
+peer through the tunnel. Each pair gets one of these states:</p>
+<table>
+<thead>
+<tr>
+<th>State</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>ok</code></td>
+<td>A handshake in the last 3 minutes, or a ping reply through the tunnel.</td>
+</tr>
+<tr>
+<td><code>idle</code></td>
+<td>No recent handshake, and <code>--no-ping</code> was given, so it wasn't tested.</td>
+</tr>
+<tr>
+<td><code>down</code></td>
+<td>Both ends are up, but nothing gets through.</td>
+</tr>
+<tr>
+<td><code>missing</code></td>
+<td>An end isn't applied yet, or its interface is down.</td>
+</tr>
+<tr>
+<td><code>unknown</code></td>
+<td>Neither end could be reached.</td>
+</tr>
+</tbody>
+</table>
+<p>One reachable end is enough to judge a link. Handshake ages are measured with
+the clock of the node that saw them, so clock differences between machines
+don't skew the result.</p>
+<p>For scripts and monitoring:</p>
+<pre><code class="language-sh">wglink status --exit-code     # exits 2 unless every link is ok
+wglink status --json          # stable JSON: states, handshake ages, round trips, bytes
+wglink status --net lab       # only some networks
+</code></pre>
+<p>On a node, <code>sudo wglink status --local</code> shows that machine's WireGuard
+interfaces without needing the inventory. Peers are named from the comments
+wglink writes in its configs. It also runs when no <code>wglink.yaml</code> is found.</p>
+
+<nav class="pager" aria-label="Previous and next pages">
+<a href="commands.html"><span>Previous</span>Commands</a>
+<a class="next" href="how-it-works.html"><span>Next</span>How it works</a>
+</nav>
+</main>
+</div>
+
+<footer class="foot">
+<div class="wrap">
+<span>wglink is MIT licensed. Built by <a href="https://github.com/gureetk">gureet</a>.</span>
+<nav aria-label="Project">
+<a href="https://github.com/gureetk/wglink">Source</a>
+<a href="https://github.com/gureetk/wglink/releases">Releases</a>
+<a href="https://github.com/gureetk/wglink/blob/main/CHANGELOG.md">Changelog</a>
+</nav>
+</div>
+</footer>
+
+</body>
+</html>

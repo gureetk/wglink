@@ -1,0 +1,105 @@
+<!doctype html>
+<!-- Made by scripts/docgen from README.md and wglink's help. Edit those, not this file. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Phones and other devices · wglink docs</title>
+<meta name="description" content="Some peers are devices wglink can&#39;t reach, such as phones, tablets or a friend&#39;s laptop. Add them as manual nodes.">
+<meta name="color-scheme" content="light dark">
+<link rel="icon" href="../favicon.svg" type="image/svg+xml">
+<script>try{var t=localStorage.getItem("theme");if(t==="light"||t==="dark")document.documentElement.dataset.theme=t}catch(e){}</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=JetBrains+Mono:wght@400;600&amp;family=Space+Grotesk:wght@500;600;700&amp;display=swap">
+<link rel="stylesheet" href="../style.css">
+<script src="../site.js" defer></script>
+</head>
+<body>
+
+<header class="top docs-top">
+<div class="wrap">
+<a class="brand" href="../"><span class="dot" aria-hidden="true"></span>wglink <span class="sub">docs</span></a>
+<nav class="nav" aria-label="Main">
+<a class="button" href="https://github.com/gureetk/wglink">GitHub</a>
+<button class="button theme-toggle" type="button" aria-label="Switch theme">
+<svg class="moon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+<svg class="sun" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
+</button>
+</nav>
+</div>
+</header>
+
+<div class="wrap docs">
+<nav class="sidebar" aria-label="Docs">
+<div>
+<p>Getting started</p>
+<a href="./">Overview</a>
+<a href="install.html">Install</a>
+<a href="quick-start.html">Quick start</a>
+<a href="inventory.html">The inventory</a>
+</div>
+<div>
+<p>Guides</p>
+<a href="reaching-machines.html">Reaching machines</a>
+<a href="phones.html" aria-current="page">Phones and other devices</a>
+<a href="hub-and-spoke.html">Hub and spoke</a>
+<a href="routed-subnets.html">Routed subnets</a>
+<a href="ipv6.html">IPv6</a>
+<a href="preshared-keys.html">Preshared keys</a>
+<a href="rotating-keys.html">Rotating keys</a>
+<a href="removing.html">Removing nodes and networks</a>
+<a href="dashboard.html">Dashboard</a>
+</div>
+<div>
+<p>Reference</p>
+<a href="commands.html">Commands</a>
+<a href="status.html">Status</a>
+<a href="how-it-works.html">How it works</a>
+<a href="security.html">Security</a>
+<a href="compared.html">Compared with other tools</a>
+</div>
+<div>
+<p>Project</p>
+<a href="development.html">Development</a>
+</div>
+</nav>
+
+<main class="article">
+<h1>Phones and other devices</h1>
+<p>Some peers are devices wglink can't reach, such as phones, tablets or a
+friend's laptop. Add them as <strong>manual</strong> nodes. wglink gives them an address
+and adds them to every other member's config, and you load their own config
+on the device:</p>
+<pre><code class="language-sh">wglink node add phone --manual --keepalive 25
+wglink net join lab phone
+wglink export lab phone -o phone.conf    # makes the phone's key pair
+qrencode -t ansiutf8 &lt; phone.conf        # scan it with the WireGuard app
+wglink apply                             # the other members accept the phone
+</code></pre>
+<p>The phone's private key is only in that exported config; wglink keeps just
+the public key. If the device already has a key, pass its public key with
+<code>--pubkey</code> instead. When the phone's config changes, for example because a
+member joined or moved, <code>wglink plan</code> says so and <code>wglink export</code> gives the
+new one.</p>
+
+<nav class="pager" aria-label="Previous and next pages">
+<a href="reaching-machines.html"><span>Previous</span>Reaching machines</a>
+<a class="next" href="hub-and-spoke.html"><span>Next</span>Hub and spoke</a>
+</nav>
+</main>
+</div>
+
+<footer class="foot">
+<div class="wrap">
+<span>wglink is MIT licensed. Built by <a href="https://github.com/gureetk">gureet</a>.</span>
+<nav aria-label="Project">
+<a href="https://github.com/gureetk/wglink">Source</a>
+<a href="https://github.com/gureetk/wglink/releases">Releases</a>
+<a href="https://github.com/gureetk/wglink/blob/main/CHANGELOG.md">Changelog</a>
+</nav>
+</div>
+</footer>
+
+</body>
+</html>
